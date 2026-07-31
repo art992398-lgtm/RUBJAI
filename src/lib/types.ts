@@ -26,6 +26,16 @@ export interface CustomCategory {
   hint?: string;
 }
 
+export interface Saving {
+  id: string;
+  amount: number;
+  type: "in" | "out"; // in = เก็บเข้าออม, out = ถอน
+  date: string; // ISO yyyy-mm-dd
+  note?: string;
+  month?: string; // "YYYY-MM" when this came from a month's leftover
+  createdAt?: number;
+}
+
 export interface RecurringRule {
   id: string;
   type: TxType;

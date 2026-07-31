@@ -7,9 +7,18 @@ import {
   onSnapshot,
   query,
   orderBy,
+  deleteField,
+  type FieldValue,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { NewTransaction, Transaction } from "./types";
+
+// optional fields that must be removed from the doc when cleared on edit
+const OPTIONAL_FIELDS: (keyof NewTransaction)[] = [
+  "note",
+  "accountId",
+  "receiptUrl",
+];
 
 // Per-user isolation: users/{uid}/transactions/{id}
 function txCol(uid: string) {
@@ -38,8 +47,14 @@ export async function addTransaction(uid: string, tx: NewTransaction) {
 export async function updateTransaction(
   uid: string,
   id: string,
-  patch: Partial<NewTransaction>
+  tx: NewTransaction
 ) {
+  // Build a full patch. For optional fields left empty, explicitly delete them
+  // (updateDoc merges, so an omitted field would otherwise keep its old value).
+  const patch: Record<string, unknown | FieldValue> = { ...tx };
+  for (const f of OPTIONAL_FIELDS) {
+    if (tx[f] === undefined || tx[f] === "") patch[f] = deleteField();
+  }
   return updateDoc(doc(db, "users", uid, "transactions", id), patch);
 }
 

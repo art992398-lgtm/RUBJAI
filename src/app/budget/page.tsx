@@ -72,17 +72,18 @@ export default function BudgetPage() {
     [rows, monthKey]
   );
 
-  // spend per week — counts only days that fall in the selected month,
-  // so a boundary week (e.g. 27 Jul–2 Aug) shows only its August portion
+  // spend per week — full Mon–Sun week. Each week belongs to exactly one
+  // month (weeksOfMonth uses the Thursday rule), so summing the shown weeks
+  // never double-counts a boundary week across two months.
   const spentByWeek = useMemo(() => {
     const m: Record<string, number> = {};
-    for (const r of monthRows) {
+    for (const r of rows) {
       if (r.type !== "expense") continue;
       const k = weekKeyOf(r.date);
       m[k] = (m[k] ?? 0) + r.amount;
     }
     return m;
-  }, [monthRows]);
+  }, [rows]);
 
   // alert once when current week crosses 80% / 100%
   useEffect(() => {

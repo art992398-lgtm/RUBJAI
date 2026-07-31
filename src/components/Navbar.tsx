@@ -9,6 +9,7 @@ import {
   LogOut,
   LayoutDashboard,
   CalendarRange,
+  PiggyBank,
   Receipt,
   Settings,
   Moon,
@@ -17,7 +18,8 @@ import {
 
 const TABS = [
   { href: "/dashboard", label: "รายการ", icon: LayoutDashboard },
-  { href: "/budget", label: "งบสัปดาห์", icon: CalendarRange },
+  { href: "/budget", label: "งบ", icon: CalendarRange },
+  { href: "/savings", label: "ออม", icon: PiggyBank },
   { href: "/tax", label: "ภาษี", icon: Receipt },
   { href: "/settings", label: "ตั้งค่า", icon: Settings },
 ];

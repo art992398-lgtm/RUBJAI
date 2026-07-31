@@ -34,6 +34,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!auth) {
+      // Firebase not configured (missing env). Don't crash — stop loading.
+      setLoading(false);
+      return;
+    }
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setLoading(false);
@@ -42,6 +47,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const loginGoogle = async () => {
+    if (!auth) {
+      throw new Error(
+        "ยังไม่ได้ตั้งค่า Firebase (env vars). ตั้งค่าใน Vercel แล้ว redeploy"
+      );
+    }
     await signInWithPopup(auth, googleProvider);
   };
 

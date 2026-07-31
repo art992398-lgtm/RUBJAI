@@ -56,7 +56,8 @@ export function TransactionList({ rows, onDelete, onEdit }: Props) {
         <div className="col-span-3">รายการ</div>
         <div className="col-span-2 text-right">รายรับ</div>
         <div className="col-span-2 text-right">รายจ่าย</div>
-        <div className="col-span-3 text-right">คงเหลือ</div>
+        <div className="col-span-2 text-right">คงเหลือ</div>
+        <div className="col-span-1 text-right">แก้ไข</div>
       </div>
 
       <ul className="divide-y divide-blush-50 dark:divide-plum-800">
@@ -108,16 +109,17 @@ export function TransactionList({ rows, onDelete, onEdit }: Props) {
               {tx.type === "expense" ? formatMoney(tx.amount) : "—"}
             </div>
 
-            <div className="col-span-2 flex items-center justify-end gap-1 md:col-span-3">
-              <span
-                className={`mr-1 whitespace-nowrap tabular-nums font-semibold ${
-                  balance >= 0
-                    ? "text-blush-700 dark:text-blush-200"
-                    : "text-rose-600"
-                }`}
-              >
-                {formatMoney(balance)}
-              </span>
+            <div
+              className={`col-span-2 whitespace-nowrap text-right font-semibold tabular-nums md:col-span-2 ${
+                balance >= 0
+                  ? "text-blush-700 dark:text-blush-200"
+                  : "text-rose-600"
+              }`}
+            >
+              {formatMoney(balance)}
+            </div>
+
+            <div className="col-span-2 flex items-center justify-end gap-1 md:col-span-1">
               <button
                 onClick={() => onEdit(tx)}
                 aria-label="แก้ไข"

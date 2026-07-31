@@ -271,6 +271,7 @@ function CategoryBudgets() {
               {c.label}
             </span>
             <input
+              key={`${c.key}-${categoryBudgets[c.key] ?? ""}`}
               type="number"
               min="0"
               step="100"

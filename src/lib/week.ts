@@ -49,7 +49,10 @@ function shortDay(d: Date): string {
   return `${d.getDate()} ${THAI_MONTHS[d.getMonth()]}`;
 }
 
-// All Mon..Sun weeks overlapping the given month
+// Mon..Sun weeks that BELONG to the given month.
+// A week belongs to the month that contains its Thursday (the week's majority),
+// so every calendar week maps to exactly ONE month — no boundary week is
+// counted in two months.
 export function weeksOfMonth(year: number, month0: number): WeekInfo[] {
   const first = new Date(year, month0, 1);
   const last = new Date(year, month0 + 1, 0);
@@ -57,18 +60,21 @@ export function weeksOfMonth(year: number, month0: number): WeekInfo[] {
   const weeks: WeekInfo[] = [];
   let idx = 1;
   while (cursor <= last) {
-    const start = cursor;
-    const end = addDays(cursor, 6);
-    weeks.push({
-      key: toIso(start),
-      index: idx,
-      start: toIso(start),
-      end: toIso(end),
-      label: `สัปดาห์ที่ ${idx}`,
-      range: `${shortDay(start)} – ${shortDay(end)}`,
-    });
+    const thursday = addDays(cursor, 3);
+    if (thursday.getFullYear() === year && thursday.getMonth() === month0) {
+      const start = cursor;
+      const end = addDays(cursor, 6);
+      weeks.push({
+        key: toIso(start),
+        index: idx,
+        start: toIso(start),
+        end: toIso(end),
+        label: `สัปดาห์ที่ ${idx}`,
+        range: `${shortDay(start)} – ${shortDay(end)}`,
+      });
+      idx++;
+    }
     cursor = addDays(cursor, 7);
-    idx++;
   }
   return weeks;
 }
