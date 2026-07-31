@@ -18,6 +18,7 @@ import { CategoryBudgetBars } from "@/components/CategoryBudgetBars";
 import { subscribeTransactions } from "@/lib/transactions";
 import { subscribeBudgets, setBudget, type BudgetMap } from "@/lib/budgets";
 import { notifyBrowser } from "@/lib/notify";
+import { categoryOverageByRow } from "@/lib/categoryOverage";
 import type { Transaction } from "@/lib/types";
 import { weeksOfMonth, weekKeyOf, monthLabel, isCurrentWeek } from "@/lib/week";
 import { formatBaht } from "@/lib/format";
@@ -77,17 +78,25 @@ export default function BudgetPage() {
   // belongs to exactly one month, so summing the shown weeks never
   // double-counts a boundary week across two months. Categories that have
   // their own monthly category budget (below) are tracked there instead —
-  // they don't also eat into the weekly budget.
+  // only the amount that goes OVER that limit spills back into the week.
+  const categoryOverage = useMemo(
+    () => categoryOverageByRow(rows, categoryBudgets),
+    [rows, categoryBudgets]
+  );
   const spentByWeek = useMemo(() => {
     const m: Record<string, number> = {};
     for (const r of rows) {
       if (r.type !== "expense") continue;
-      if (categoryBudgets[r.category] > 0) continue;
+      const amt =
+        categoryBudgets[r.category] > 0
+          ? categoryOverage.get(r.id) ?? 0
+          : r.amount;
+      if (amt <= 0) continue;
       const k = weekKeyOf(r.date);
-      m[k] = (m[k] ?? 0) + r.amount;
+      m[k] = (m[k] ?? 0) + amt;
     }
     return m;
-  }, [rows, categoryBudgets]);
+  }, [rows, categoryBudgets, categoryOverage]);
 
   // alert once when current week crosses 80% / 100%
   useEffect(() => {

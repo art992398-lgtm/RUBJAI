@@ -17,6 +17,7 @@ import { subscribeBudgets, type BudgetMap } from "@/lib/budgets";
 import { subscribeSavings } from "@/lib/savings";
 import { subscribeDebts } from "@/lib/debts";
 import { accountBalances } from "@/lib/balances";
+import { categoryOverageByRow } from "@/lib/categoryOverage";
 import { postDueRecurring } from "@/lib/recurring";
 import { exportTransactionsCsv } from "@/lib/exporters";
 import { exportNodeAsPdf } from "@/lib/pdfExport";
@@ -41,6 +42,7 @@ import { Navbar } from "@/components/Navbar";
 import { SummaryCards } from "@/components/SummaryCards";
 import { HomeWidget } from "@/components/HomeWidget";
 import { AccountBalances } from "@/components/AccountBalances";
+import { CategoryBudgetBars } from "@/components/CategoryBudgetBars";
 import { MonthCompare } from "@/components/MonthCompare";
 import { MonthlyReportTemplate } from "@/components/MonthlyReportTemplate";
 import { TransactionForm } from "@/components/TransactionForm";
@@ -55,7 +57,8 @@ export default function Dashboard() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const { notify } = useToast();
-  const { recurring, labelOf, accountName, accounts, categoryBudgets } = useData();
+  const { recurring, labelOf, accountName, accounts, categoryBudgets, categoriesForType } =
+    useData();
 
   const [rows, setRows] = useState<Transaction[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
@@ -213,17 +216,25 @@ export default function Dashboard() {
 
   const thisWeekKey = useMemo(() => weekKeyOf(weekTodayIso()), []);
   const thisWeekLimit = budgets[thisWeekKey] ?? 0;
+
+  // categories with their own monthly budget only spill into the week
+  // budget once they go over that limit — the overage, not the whole amount.
+  const categoryOverage = useMemo(
+    () => categoryOverageByRow(rows, categoryBudgets),
+    [rows, categoryBudgets]
+  );
   const thisWeekSpent = useMemo(
     () =>
       rows
-        .filter(
-          (r) =>
-            r.type === "expense" &&
-            weekKeyOf(r.date) === thisWeekKey &&
-            !(categoryBudgets[r.category] > 0) // has its own monthly budget -> not part of the week budget
-        )
-        .reduce((s, r) => s + r.amount, 0),
-    [rows, thisWeekKey, categoryBudgets]
+        .filter((r) => r.type === "expense" && weekKeyOf(r.date) === thisWeekKey)
+        .reduce((s, r) => {
+          const amt =
+            categoryBudgets[r.category] > 0
+              ? categoryOverage.get(r.id) ?? 0
+              : r.amount;
+          return s + amt;
+        }, 0),
+    [rows, thisWeekKey, categoryBudgets, categoryOverage]
   );
 
   const thisWeekEnd = useMemo(() => {
@@ -356,6 +367,13 @@ export default function Dashboard() {
           accounts={accounts}
           balances={balances}
           onTransfer={() => setTransferOpen(true)}
+        />
+
+        <CategoryBudgetBars
+          categories={categoriesForType("expense")}
+          budgets={categoryBudgets}
+          rows={monthRows}
+          labelOf={labelOf}
         />
 
         <Charts monthRows={monthRows} allRows={rows} />
