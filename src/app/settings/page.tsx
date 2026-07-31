@@ -313,7 +313,7 @@ function Recurring() {
       description: description.trim(),
       category: category || categoriesForType(type)[0].key,
       amount: amt,
-      dayOfMonth: Math.min(Math.max(1, d || 1), 28),
+      dayOfMonth: Math.min(Math.max(1, d || 1), 31),
     });
     setDescription("");
     setAmount("");
@@ -393,7 +393,7 @@ function Recurring() {
           <input
             type="number"
             min="1"
-            max="28"
+            max="31"
             value={day}
             onChange={(e) => setDay(e.target.value)}
             className={`${inputCls} w-20`}

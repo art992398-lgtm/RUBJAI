@@ -66,21 +66,23 @@ export default function BudgetPage() {
 
   const weeks = useMemo(() => weeksOfMonth(year, month0), [year, month0]);
 
-  const spentByWeek = useMemo(() => {
-    const m: Record<string, number> = {};
-    for (const r of rows) {
-      if (r.type !== "expense") continue;
-      const k = weekKeyOf(r.date);
-      m[k] = (m[k] ?? 0) + r.amount;
-    }
-    return m;
-  }, [rows]);
-
   const monthKey = `${year}-${String(month0 + 1).padStart(2, "0")}`;
   const monthRows = useMemo(
     () => rows.filter((r) => r.date.slice(0, 7) === monthKey),
     [rows, monthKey]
   );
+
+  // spend per week — counts only days that fall in the selected month,
+  // so a boundary week (e.g. 27 Jul–2 Aug) shows only its August portion
+  const spentByWeek = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const r of monthRows) {
+      if (r.type !== "expense") continue;
+      const k = weekKeyOf(r.date);
+      m[k] = (m[k] ?? 0) + r.amount;
+    }
+    return m;
+  }, [monthRows]);
 
   // alert once when current week crosses 80% / 100%
   useEffect(() => {

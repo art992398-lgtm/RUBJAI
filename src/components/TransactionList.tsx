@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   Trash2,
   Pencil,
@@ -13,6 +13,7 @@ import {
 import type { Transaction } from "@/lib/types";
 import { useData } from "@/lib/data-context";
 import { formatMoney, formatDateThai } from "@/lib/format";
+import { Modal } from "./Modal";
 
 interface Props {
   rows: Transaction[];
@@ -22,6 +23,7 @@ interface Props {
 
 export function TransactionList({ rows, onDelete, onEdit }: Props) {
   const { labelOf, accountName } = useData();
+  const [preview, setPreview] = useState<string | null>(null);
 
   // running balance oldest -> newest, display newest first
   const withBalance = useMemo(() => {
@@ -51,10 +53,10 @@ export function TransactionList({ rows, onDelete, onEdit }: Props) {
     <div className="overflow-hidden rounded-2xl border border-blush-100 dark:border-plum-800 bg-white/80 dark:bg-plum-900/60 shadow-soft">
       <div className="hidden grid-cols-12 gap-2 border-b border-blush-100 dark:border-plum-800 bg-blush-50/60 dark:bg-plum-800 px-4 py-3 text-xs font-semibold text-blush-600 dark:text-blush-300 md:grid">
         <div className="col-span-2">วันที่</div>
-        <div className="col-span-4">รายการ</div>
+        <div className="col-span-3">รายการ</div>
         <div className="col-span-2 text-right">รายรับ</div>
         <div className="col-span-2 text-right">รายจ่าย</div>
-        <div className="col-span-2 text-right">คงเหลือ</div>
+        <div className="col-span-3 text-right">คงเหลือ</div>
       </div>
 
       <ul className="divide-y divide-blush-50 dark:divide-plum-800">
@@ -67,7 +69,7 @@ export function TransactionList({ rows, onDelete, onEdit }: Props) {
               {formatDateThai(tx.date)}
             </div>
 
-            <div className="col-span-1 md:col-span-4">
+            <div className="col-span-1 min-w-0 md:col-span-3">
               <div className="flex items-center gap-2 font-medium text-blush-800 dark:text-blush-100">
                 {tx.type === "income" ? (
                   <TrendingUp className="h-4 w-4 shrink-0 text-emerald-500" />
@@ -76,15 +78,15 @@ export function TransactionList({ rows, onDelete, onEdit }: Props) {
                 )}
                 <span className="truncate">{tx.description}</span>
                 {tx.receiptUrl && (
-                  <a
-                    href={tx.receiptUrl}
-                    target="_blank"
-                    rel="noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => setPreview(tx.receiptUrl ?? null)}
                     className="shrink-0 text-blush-400 hover:text-blush-600"
                     title="ดูสลิป"
+                    aria-label="ดูสลิป"
                   >
                     <Paperclip className="h-3.5 w-3.5" />
-                  </a>
+                  </button>
                 )}
               </div>
               <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-blush-500">
@@ -99,16 +101,16 @@ export function TransactionList({ rows, onDelete, onEdit }: Props) {
               </div>
             </div>
 
-            <div className="col-span-2 text-right font-medium text-emerald-600 md:col-span-2">
+            <div className="col-span-2 whitespace-nowrap text-right font-medium tabular-nums text-emerald-600 md:col-span-2">
               {tx.type === "income" ? formatMoney(tx.amount) : "—"}
             </div>
-            <div className="col-span-2 text-right font-medium text-rose-500 md:col-span-2">
+            <div className="col-span-2 whitespace-nowrap text-right font-medium tabular-nums text-rose-500 md:col-span-2">
               {tx.type === "expense" ? formatMoney(tx.amount) : "—"}
             </div>
 
-            <div className="col-span-2 flex items-center justify-end gap-1 md:col-span-2">
+            <div className="col-span-2 flex items-center justify-end gap-1 md:col-span-3">
               <span
-                className={`mr-1 font-semibold ${
+                className={`mr-1 whitespace-nowrap tabular-nums font-semibold ${
                   balance >= 0
                     ? "text-blush-700 dark:text-blush-200"
                     : "text-rose-600"
@@ -119,14 +121,14 @@ export function TransactionList({ rows, onDelete, onEdit }: Props) {
               <button
                 onClick={() => onEdit(tx)}
                 aria-label="แก้ไข"
-                className="rounded-lg p-1.5 text-blush-400 transition hover:bg-blush-50 dark:hover:bg-plum-800 hover:text-blush-600"
+                className="shrink-0 rounded-lg p-1.5 text-blush-400 transition hover:bg-blush-50 dark:hover:bg-plum-800 hover:text-blush-600"
               >
                 <Pencil className="h-4 w-4" />
               </button>
               <button
                 onClick={() => onDelete(tx.id)}
                 aria-label="ลบรายการ"
-                className="rounded-lg p-1.5 text-blush-400 transition hover:bg-rose-50 hover:text-rose-500"
+                className="shrink-0 rounded-lg p-1.5 text-blush-400 transition hover:bg-rose-50 hover:text-rose-500"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -134,6 +136,21 @@ export function TransactionList({ rows, onDelete, onEdit }: Props) {
           </li>
         ))}
       </ul>
+
+      <Modal
+        open={!!preview}
+        onClose={() => setPreview(null)}
+        title="สลิป / ใบเสร็จ"
+      >
+        {preview && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={preview}
+            alt="สลิป"
+            className="mx-auto max-h-[70vh] w-full rounded-xl object-contain"
+          />
+        )}
+      </Modal>
     </div>
   );
 }

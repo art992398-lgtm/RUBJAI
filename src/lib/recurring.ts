@@ -16,11 +16,18 @@ export async function postDueRecurring(
   const month = currentMonthKey();
   const today = new Date();
   const dom = today.getDate();
+  // last calendar day of the current month (handles 28/29/30/31)
+  const lastDay = new Date(
+    today.getFullYear(),
+    today.getMonth() + 1,
+    0
+  ).getDate();
   let posted = 0;
 
   for (const r of rules) {
     if (r.lastMonth === month) continue; // already posted this month
-    const day = Math.min(Math.max(1, r.dayOfMonth), 28);
+    // a rule set to e.g. day 31 posts on the last day of shorter months
+    const day = Math.min(Math.max(1, r.dayOfMonth), lastDay);
     if (dom < day) continue; // not due yet
 
     const dateIso = `${month}-${String(day).padStart(2, "0")}`;
