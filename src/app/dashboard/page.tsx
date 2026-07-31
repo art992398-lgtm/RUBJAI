@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useData } from "@/lib/data-context";
 import { useToast } from "@/components/ToastProvider";
@@ -12,12 +12,21 @@ import {
   updateTransaction,
   removeTransaction,
 } from "@/lib/transactions";
+import { subscribeTransfers, addTransfer, removeTransfer } from "@/lib/transfers";
+import { subscribeBudgets, type BudgetMap } from "@/lib/budgets";
+import { subscribeSavings } from "@/lib/savings";
+import { accountBalances } from "@/lib/balances";
 import { postDueRecurring } from "@/lib/recurring";
 import { exportTransactionsCsv } from "@/lib/exporters";
-import type { NewTransaction, Transaction } from "@/lib/types";
+import { weekKeyOf, todayIso as weekTodayIso } from "@/lib/week";
+import { formatMoney } from "@/lib/format";
+import type { NewTransaction, Transaction, Transfer, Saving } from "@/lib/types";
 import { Navbar } from "@/components/Navbar";
 import { SummaryCards } from "@/components/SummaryCards";
+import { HomeWidget } from "@/components/HomeWidget";
+import { AccountBalances } from "@/components/AccountBalances";
 import { TransactionForm } from "@/components/TransactionForm";
+import { TransferForm } from "@/components/TransferForm";
 import { TransactionList } from "@/components/TransactionList";
 import { Charts } from "@/components/Charts";
 import { FilterBar, type Filters } from "@/components/FilterBar";
@@ -28,11 +37,15 @@ export default function Dashboard() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const { notify } = useToast();
-  const { recurring, labelOf, accountName } = useData();
+  const { recurring, labelOf, accountName, accounts } = useData();
 
   const [rows, setRows] = useState<Transaction[]>([]);
+  const [transfers, setTransfers] = useState<Transfer[]>([]);
+  const [budgets, setBudgets] = useState<BudgetMap>({});
+  const [savings, setSavings] = useState<Saving[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Transaction | null>(null);
 
@@ -60,6 +73,18 @@ export default function Dashboard() {
       setDataLoading(false);
     });
     return () => unsub();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const u1 = subscribeTransfers(user.uid, setTransfers);
+    const u2 = subscribeBudgets(user.uid, setBudgets);
+    const u3 = subscribeSavings(user.uid, setSavings);
+    return () => {
+      u1();
+      u2();
+      u3();
+    };
   }, [user]);
 
   // auto-post recurring once per session load
@@ -102,6 +127,26 @@ export default function Dashboard() {
     return { income, expense, balance: income - expense };
   }, [monthRows]);
 
+  const balances = useMemo(
+    () => accountBalances(rows, transfers),
+    [rows, transfers]
+  );
+
+  const thisWeekKey = useMemo(() => weekKeyOf(weekTodayIso()), []);
+  const thisWeekLimit = budgets[thisWeekKey] ?? 0;
+  const thisWeekSpent = useMemo(
+    () =>
+      rows
+        .filter((r) => r.type === "expense" && weekKeyOf(r.date) === thisWeekKey)
+        .reduce((s, r) => s + r.amount, 0),
+    [rows, thisWeekKey]
+  );
+
+  const totalSavings = useMemo(
+    () => savings.reduce((s, r) => s + (r.type === "in" ? r.amount : -r.amount), 0),
+    [savings]
+  );
+
   const changeMonth = (delta: number) => {
     let m = month0 + delta;
     let y = year;
@@ -128,6 +173,13 @@ export default function Dashboard() {
     await updateTransaction(user.uid, editing.id, tx);
     notify("แก้ไขรายการแล้ว");
     setEditing(null);
+  };
+
+  const handleTransfer = async (t: Omit<Transfer, "id" | "createdAt">) => {
+    if (!user) return;
+    await addTransfer(user.uid, t);
+    notify("โอนเงินแล้ว");
+    setTransferOpen(false);
   };
 
   const confirmDelete = async () => {
@@ -162,10 +214,22 @@ export default function Dashboard() {
     <div className="min-h-screen">
       <Navbar />
       <main className="pb-safe mx-auto max-w-5xl space-y-6 px-4 py-6">
+        <HomeWidget
+          weekLimit={thisWeekLimit}
+          weekSpent={thisWeekSpent}
+          totalSavings={totalSavings}
+        />
+
         <SummaryCards
           income={totals.income}
           expense={totals.expense}
           balance={totals.balance}
+        />
+
+        <AccountBalances
+          accounts={accounts}
+          balances={balances}
+          onTransfer={() => setTransferOpen(true)}
         />
 
         <Charts monthRows={monthRows} allRows={rows} />
@@ -223,6 +287,43 @@ export default function Dashboard() {
       {/* add modal (mobile) */}
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="เพิ่มรายการใหม่">
         <TransactionForm onSubmit={handleAdd} embedded />
+      </Modal>
+
+      {/* transfer modal */}
+      <Modal open={transferOpen} onClose={() => setTransferOpen(false)} title="โอนระหว่างกระเป๋า">
+        <TransferForm onSubmit={handleTransfer} />
+        {transfers.length > 0 && (
+          <div className="mt-5 border-t border-blush-100 dark:border-plum-800 pt-4">
+            <h3 className="mb-2 text-xs font-semibold text-blush-500">
+              ประวัติการโอนล่าสุด
+            </h3>
+            <ul className="space-y-1.5">
+              {transfers.slice(0, 5).map((t) => (
+                <li
+                  key={t.id}
+                  className="flex items-center justify-between rounded-lg bg-blush-50 dark:bg-plum-800 px-3 py-2 text-xs"
+                >
+                  <span className="text-blush-700 dark:text-blush-200">
+                    {accountName(t.fromAccountId)} → {accountName(t.toAccountId)}
+                    {t.note ? ` · ${t.note}` : ""}
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span className="font-medium text-blush-600 dark:text-blush-300">
+                      {formatMoney(t.amount)}
+                    </span>
+                    <button
+                      onClick={() => user && removeTransfer(user.uid, t.id)}
+                      aria-label="ลบ"
+                      className="text-blush-400 hover:text-rose-500"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </Modal>
 
       {/* edit modal */}

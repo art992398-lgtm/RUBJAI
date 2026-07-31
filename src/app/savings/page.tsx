@@ -9,12 +9,19 @@ import {
   ArrowUpFromLine,
   Trash2,
   Check,
+  Target,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/components/ToastProvider";
 import { Navbar } from "@/components/Navbar";
 import { subscribeTransactions } from "@/lib/transactions";
-import { subscribeSavings, addSaving, removeSaving } from "@/lib/savings";
+import {
+  subscribeSavings,
+  addSaving,
+  removeSaving,
+  subscribeSavingsGoal,
+  setSavingsGoal,
+} from "@/lib/savings";
 import type { Saving, Transaction } from "@/lib/types";
 import { formatMoney, formatDateThai } from "@/lib/format";
 import { monthLabel } from "@/lib/week";
@@ -27,6 +34,8 @@ export default function SavingsPage() {
   const [savings, setSavings] = useState<Saving[]>([]);
   const [ready, setReady] = useState(false);
   const [withdraw, setWithdraw] = useState("");
+  const [goal, setGoal] = useState(0);
+  const [goalDraft, setGoalDraft] = useState("");
 
   useEffect(() => {
     if (!loading && !user) router.replace("/");
@@ -47,9 +56,14 @@ export default function SavingsPage() {
       b = true;
       done();
     });
+    const u3 = subscribeSavingsGoal(user.uid, (g) => {
+      setGoal(g);
+      setGoalDraft(g ? String(g) : "");
+    });
     return () => {
       u1();
       u2();
+      u3();
     };
   }, [user]);
 
@@ -117,6 +131,18 @@ export default function SavingsPage() {
     notify("ถอนเงินออมแล้ว", "info");
   };
 
+  const commitGoal = async () => {
+    if (!user) return;
+    const v = parseFloat(goalDraft);
+    const next = isNaN(v) || v < 0 ? 0 : v;
+    if (next !== goal) {
+      await setSavingsGoal(user.uid, next);
+      notify("ตั้งเป้าหมายออมแล้ว");
+    }
+  };
+
+  const goalPct = goal > 0 ? Math.min(100, (pot / goal) * 100) : 0;
+
   if (loading || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -144,6 +170,40 @@ export default function SavingsPage() {
           <p className="mt-1 text-3xl font-bold text-blush-700 dark:text-blush-100">
             {formatMoney(pot)}
           </p>
+
+          {/* savings goal */}
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-blush-600 dark:text-blush-300">
+            <Target className="h-4 w-4 text-blush-500" />
+            <span>เป้าหมาย</span>
+            <input
+              type="number"
+              min="0"
+              step="1000"
+              value={goalDraft}
+              onChange={(e) => setGoalDraft(e.target.value)}
+              onBlur={commitGoal}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              }}
+              placeholder="เช่น 50000"
+              className="w-32 rounded-lg border border-blush-200 dark:border-plum-800 bg-white dark:bg-plum-800 px-2.5 py-1.5 text-sm outline-none focus:border-blush-500"
+            />
+          </div>
+          {goal > 0 && (
+            <div className="mt-3">
+              <div className="mb-1 flex justify-between text-xs text-blush-500">
+                <span>{goalPct.toFixed(0)}%</span>
+                <span>{formatMoney(goal)}</span>
+              </div>
+              <div className="h-2.5 overflow-hidden rounded-full bg-blush-50 dark:bg-plum-800">
+                <div
+                  className="h-full rounded-full bg-blush-500 transition-all"
+                  style={{ width: `${goalPct}%` }}
+                />
+              </div>
+            </div>
+          )}
+
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <input
               type="number"

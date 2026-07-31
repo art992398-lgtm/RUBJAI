@@ -6,6 +6,7 @@ import {
   onSnapshot,
   query,
   orderBy,
+  setDoc,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { Saving } from "./types";
@@ -30,4 +31,16 @@ export async function addSaving(uid: string, s: Omit<Saving, "id" | "createdAt">
 
 export async function removeSaving(uid: string, id: string) {
   return deleteDoc(doc(db, "users", uid, "savings", id));
+}
+
+// savings goal is a single number on the user's profile doc
+export function subscribeSavingsGoal(uid: string, cb: (goal: number) => void) {
+  return onSnapshot(doc(db, "users", uid), (snap) => {
+    const g = (snap.data() as { savingsGoal?: number } | undefined)?.savingsGoal;
+    cb(typeof g === "number" ? g : 0);
+  });
+}
+
+export async function setSavingsGoal(uid: string, goal: number) {
+  return setDoc(doc(db, "users", uid), { savingsGoal: goal }, { merge: true });
 }

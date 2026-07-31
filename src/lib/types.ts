@@ -36,6 +36,16 @@ export interface Saving {
   createdAt?: number;
 }
 
+export interface Transfer {
+  id: string;
+  date: string; // ISO yyyy-mm-dd
+  fromAccountId: string;
+  toAccountId: string;
+  amount: number;
+  note?: string;
+  createdAt?: number;
+}
+
 export interface RecurringRule {
   id: string;
   type: TxType;
