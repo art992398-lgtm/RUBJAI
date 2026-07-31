@@ -51,26 +51,25 @@ export function TransactionList({ rows, onDelete, onEdit }: Props) {
 
   return (
     <div className="overflow-hidden rounded-2xl border border-blush-100 dark:border-plum-800 bg-white/80 dark:bg-plum-900/60 shadow-soft">
-      <div className="hidden grid-cols-12 gap-2 border-b border-blush-100 dark:border-plum-800 bg-blush-50/60 dark:bg-plum-800 px-4 py-3 text-xs font-semibold text-blush-600 dark:text-blush-300 md:grid">
+      <div className="hidden grid-cols-12 gap-4 border-b border-blush-100 dark:border-plum-800 bg-blush-50/60 dark:bg-plum-800 px-5 py-3 text-xs font-semibold text-blush-600 dark:text-blush-300 md:grid">
         <div className="col-span-2">วันที่</div>
         <div className="col-span-3">รายการ</div>
-        <div className="col-span-2 text-right">รายรับ</div>
-        <div className="col-span-2 text-right">รายจ่าย</div>
+        <div className="col-span-3 text-right">จำนวนเงิน</div>
         <div className="col-span-2 text-right">คงเหลือ</div>
-        <div className="col-span-1 text-right">แก้ไข</div>
+        <div className="col-span-2 text-right">แก้ไข</div>
       </div>
 
       <ul className="divide-y divide-blush-50 dark:divide-plum-800">
         {withBalance.map(({ tx, balance }) => (
           <li
             key={tx.id}
-            className="grid grid-cols-2 gap-2 px-4 py-3 text-sm transition hover:bg-blush-50/50 dark:hover:bg-plum-800/40 md:grid-cols-12 md:items-center"
+            className="grid grid-cols-2 gap-x-3 gap-y-2 px-5 py-4 text-sm transition-colors duration-200 hover:bg-blush-50/60 dark:hover:bg-plum-800/40 md:grid-cols-12 md:items-center md:gap-4"
           >
-            <div className="col-span-1 text-blush-600 dark:text-blush-300 md:col-span-2">
+            <div className="col-span-2 text-blush-600 dark:text-blush-300 md:col-span-2">
               {formatDateThai(tx.date)}
             </div>
 
-            <div className="col-span-1 min-w-0 md:col-span-3">
+            <div className="col-span-2 min-w-0 md:col-span-3">
               <div className="flex items-center gap-2 font-medium text-blush-800 dark:text-blush-100">
                 {tx.type === "income" ? (
                   <TrendingUp className="h-4 w-4 shrink-0 text-emerald-500" />
@@ -82,7 +81,7 @@ export function TransactionList({ rows, onDelete, onEdit }: Props) {
                   <button
                     type="button"
                     onClick={() => setPreview(tx.receiptUrl ?? null)}
-                    className="shrink-0 text-blush-400 hover:text-blush-600"
+                    className="shrink-0 text-blush-400 transition hover:text-blush-600"
                     title="ดูสลิป"
                     aria-label="ดูสลิป"
                   >
@@ -90,27 +89,33 @@ export function TransactionList({ rows, onDelete, onEdit }: Props) {
                   </button>
                 )}
               </div>
-              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-blush-500">
-                <span>{labelOf(tx.category)}</span>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                <span className="rounded-full bg-blush-50 dark:bg-plum-800 px-2 py-0.5 text-[11px] font-medium text-blush-500 dark:text-blush-300">
+                  {labelOf(tx.category)}
+                </span>
                 {accountName(tx.accountId) && (
-                  <span className="flex items-center gap-0.5">
+                  <span className="flex items-center gap-0.5 rounded-full bg-blush-50 dark:bg-plum-800 px-2 py-0.5 text-[11px] font-medium text-blush-500 dark:text-blush-300">
                     <Wallet className="h-3 w-3" />
                     {accountName(tx.accountId)}
                   </span>
                 )}
-                {tx.note && <span>· {tx.note}</span>}
+                {tx.note && (
+                  <span className="text-[11px] text-blush-400">{tx.note}</span>
+                )}
               </div>
             </div>
 
-            <div className="col-span-2 whitespace-nowrap text-right font-medium tabular-nums text-emerald-600 md:col-span-2">
-              {tx.type === "income" ? formatMoney(tx.amount) : "—"}
-            </div>
-            <div className="col-span-2 whitespace-nowrap text-right font-medium tabular-nums text-rose-500 md:col-span-2">
-              {tx.type === "expense" ? formatMoney(tx.amount) : "—"}
+            <div
+              className={`col-span-1 whitespace-nowrap text-right font-semibold tabular-nums md:col-span-3 ${
+                tx.type === "income" ? "text-emerald-600" : "text-rose-500"
+              }`}
+            >
+              {tx.type === "income" ? "+" : "-"}
+              {formatMoney(tx.amount)}
             </div>
 
             <div
-              className={`col-span-2 whitespace-nowrap text-right font-semibold tabular-nums md:col-span-2 ${
+              className={`col-span-1 whitespace-nowrap text-right font-semibold tabular-nums md:col-span-2 ${
                 balance >= 0
                   ? "text-blush-700 dark:text-blush-200"
                   : "text-rose-600"
@@ -119,18 +124,18 @@ export function TransactionList({ rows, onDelete, onEdit }: Props) {
               {formatMoney(balance)}
             </div>
 
-            <div className="col-span-2 flex items-center justify-end gap-1 md:col-span-1">
+            <div className="col-span-2 flex items-center justify-end gap-1 md:col-span-2">
               <button
                 onClick={() => onEdit(tx)}
                 aria-label="แก้ไข"
-                className="shrink-0 rounded-lg p-1.5 text-blush-400 transition hover:bg-blush-50 dark:hover:bg-plum-800 hover:text-blush-600"
+                className="shrink-0 rounded-full p-1.5 text-blush-400 transition hover:bg-blush-50 dark:hover:bg-plum-800 hover:text-blush-600"
               >
                 <Pencil className="h-4 w-4" />
               </button>
               <button
                 onClick={() => onDelete(tx.id)}
                 aria-label="ลบรายการ"
-                className="shrink-0 rounded-lg p-1.5 text-blush-400 transition hover:bg-rose-50 hover:text-rose-500"
+                className="shrink-0 rounded-full p-1.5 text-blush-400 transition hover:bg-rose-50 hover:text-rose-500"
               >
                 <Trash2 className="h-4 w-4" />
               </button>

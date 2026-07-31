@@ -46,6 +46,17 @@ export interface Transfer {
   createdAt?: number;
 }
 
+export interface Debt {
+  id: string;
+  name: string;
+  principal: number; // total borrowed / installment price
+  remaining: number; // balance left to pay
+  monthlyPayment: number;
+  nextDueDate: string; // ISO yyyy-mm-dd
+  note?: string;
+  createdAt?: number;
+}
+
 export interface RecurringRule {
   id: string;
   type: TxType;

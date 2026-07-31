@@ -11,6 +11,7 @@ import {
   CalendarRange,
   PiggyBank,
   Receipt,
+  CreditCard,
   Settings,
   Moon,
   Sun,
@@ -20,14 +21,16 @@ const TABS = [
   { href: "/dashboard", label: "รายการ", icon: LayoutDashboard },
   { href: "/budget", label: "งบ", icon: CalendarRange },
   { href: "/savings", label: "ออม", icon: PiggyBank },
+  { href: "/debt", label: "หนี้", icon: CreditCard },
   { href: "/tax", label: "ภาษี", icon: Receipt },
   { href: "/settings", label: "ตั้งค่า", icon: Settings },
 ];
 
 export function Navbar() {
   const { user, logout } = useAuth();
-  const { theme, toggleTheme } = useSettings();
+  const { theme, toggleTheme, displayName } = useSettings();
   const pathname = usePathname();
+  const shownName = displayName || user?.displayName || "ผู้ใช้";
 
   return (
     <>
@@ -76,11 +79,14 @@ export function Navbar() {
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={user.photoURL}
-                alt={user.displayName ?? "user"}
+                alt={shownName}
                 className="h-8 w-8 rounded-full border border-blush-200 dark:border-plum-800"
                 referrerPolicy="no-referrer"
               />
             ) : null}
+            <span className="hidden max-w-[10rem] truncate text-sm font-medium text-blush-700 dark:text-blush-200 sm:inline">
+              {shownName}
+            </span>
             <button
               onClick={() => logout()}
               className="flex items-center gap-1.5 rounded-lg border border-blush-200 dark:border-plum-800 bg-white dark:bg-plum-800 px-2.5 py-1.5 text-sm font-medium text-blush-700 dark:text-blush-200 hover:bg-blush-50 dark:hover:bg-plum-700"

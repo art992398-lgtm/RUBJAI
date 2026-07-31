@@ -15,16 +15,31 @@ import {
 import { subscribeTransfers, addTransfer, removeTransfer } from "@/lib/transfers";
 import { subscribeBudgets, type BudgetMap } from "@/lib/budgets";
 import { subscribeSavings } from "@/lib/savings";
+import { subscribeDebts } from "@/lib/debts";
 import { accountBalances } from "@/lib/balances";
 import { postDueRecurring } from "@/lib/recurring";
 import { exportTransactionsCsv } from "@/lib/exporters";
-import { weekKeyOf, todayIso as weekTodayIso } from "@/lib/week";
+import {
+  weekKeyOf,
+  todayIso as weekTodayIso,
+  daysLeftInWeek,
+  fromIso,
+  toIso,
+} from "@/lib/week";
 import { formatMoney } from "@/lib/format";
-import type { NewTransaction, Transaction, Transfer, Saving } from "@/lib/types";
+import { notifyBrowser } from "@/lib/notify";
+import type {
+  NewTransaction,
+  Transaction,
+  Transfer,
+  Saving,
+  Debt,
+} from "@/lib/types";
 import { Navbar } from "@/components/Navbar";
 import { SummaryCards } from "@/components/SummaryCards";
 import { HomeWidget } from "@/components/HomeWidget";
 import { AccountBalances } from "@/components/AccountBalances";
+import { MonthCompare } from "@/components/MonthCompare";
 import { TransactionForm } from "@/components/TransactionForm";
 import { TransferForm } from "@/components/TransferForm";
 import { TransactionList } from "@/components/TransactionList";
@@ -43,6 +58,7 @@ export default function Dashboard() {
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [budgets, setBudgets] = useState<BudgetMap>({});
   const [savings, setSavings] = useState<Saving[]>([]);
+  const [debts, setDebts] = useState<Debt[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
@@ -80,12 +96,35 @@ export default function Dashboard() {
     const u1 = subscribeTransfers(user.uid, setTransfers);
     const u2 = subscribeBudgets(user.uid, setBudgets);
     const u3 = subscribeSavings(user.uid, setSavings);
+    const u4 = subscribeDebts(user.uid, setDebts);
     return () => {
       u1();
       u2();
       u3();
+      u4();
     };
   }, [user]);
+
+  // notify once per session if any debt is due within 3 days
+  const dueAlerted = useRef(false);
+  useEffect(() => {
+    if (dueAlerted.current || debts.length === 0) return;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const soon = debts.filter((d) => {
+      if (d.remaining <= 0) return false;
+      const due = new Date(d.nextDueDate + "T00:00:00");
+      const days = Math.round((due.getTime() - today.getTime()) / 86400000);
+      return days >= 0 && days <= 3;
+    });
+    if (soon.length > 0) {
+      dueAlerted.current = true;
+      notifyBrowser(
+        "งวดหนี้ใกล้ครบกำหนด",
+        soon.map((d) => d.name).join(", ")
+      );
+    }
+  }, [debts]);
 
   // auto-post recurring once per session load
   useEffect(() => {
@@ -127,6 +166,24 @@ export default function Dashboard() {
     return { income, expense, balance: income - expense };
   }, [monthRows]);
 
+  const prevTotals = useMemo(() => {
+    let m = month0 - 1;
+    let y = year;
+    if (m < 0) {
+      m = 11;
+      y--;
+    }
+    const prevKey = `${y}-${String(m + 1).padStart(2, "0")}`;
+    let income = 0;
+    let expense = 0;
+    for (const r of rows) {
+      if (r.date.slice(0, 7) !== prevKey) continue;
+      if (r.type === "income") income += r.amount;
+      else expense += r.amount;
+    }
+    return { income, expense };
+  }, [rows, year, month0]);
+
   const balances = useMemo(
     () => accountBalances(rows, transfers),
     [rows, transfers]
@@ -141,6 +198,14 @@ export default function Dashboard() {
         .reduce((s, r) => s + r.amount, 0),
     [rows, thisWeekKey]
   );
+
+  const thisWeekEnd = useMemo(() => {
+    const d = fromIso(thisWeekKey);
+    const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    const endDay = Math.min(d.getDate() + 6, lastDay);
+    return toIso(new Date(d.getFullYear(), d.getMonth(), endDay));
+  }, [thisWeekKey]);
+  const thisWeekDaysLeft = daysLeftInWeek(thisWeekKey, thisWeekEnd);
 
   const totalSavings = useMemo(
     () => savings.reduce((s, r) => s + (r.type === "in" ? r.amount : -r.amount), 0),
@@ -217,6 +282,7 @@ export default function Dashboard() {
         <HomeWidget
           weekLimit={thisWeekLimit}
           weekSpent={thisWeekSpent}
+          daysLeft={thisWeekDaysLeft}
           totalSavings={totalSavings}
         />
 
@@ -224,6 +290,13 @@ export default function Dashboard() {
           income={totals.income}
           expense={totals.expense}
           balance={totals.balance}
+        />
+
+        <MonthCompare
+          expense={totals.expense}
+          prevExpense={prevTotals.expense}
+          income={totals.income}
+          prevIncome={prevTotals.income}
         />
 
         <AccountBalances

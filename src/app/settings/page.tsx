@@ -11,13 +11,30 @@ import {
   Plus,
   Palette,
   Target,
+  User,
+  Lock,
+  Download,
+  Upload,
+  Bell,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
 import { useData } from "@/lib/data-context";
 import { useToast } from "@/components/ToastProvider";
 import { Navbar } from "@/components/Navbar";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { CURRENCIES, formatMoney } from "@/lib/format";
+import { hashPin } from "@/lib/pin";
+import {
+  exportBackup,
+  downloadBackup,
+  importBackup,
+  type BackupPayload,
+} from "@/lib/backup";
+import {
+  notifyPermission,
+  requestNotifyPermission,
+} from "@/lib/notify";
 import type { TxType } from "@/lib/types";
 
 export default function SettingsPage() {
@@ -43,6 +60,10 @@ export default function SettingsPage() {
         <h1 className="text-lg font-bold text-blush-700 dark:text-blush-200">
           ตั้งค่า
         </h1>
+        <Profile />
+        <PinLock />
+        <BackupRestore />
+        <NotificationSettings />
         <Appearance />
         <Accounts />
         <Categories />
@@ -79,6 +100,252 @@ const inputCls =
   "rounded-lg border border-blush-200 dark:border-plum-800 bg-white dark:bg-plum-800 px-3 py-2 text-sm outline-none focus:border-blush-500";
 const btnCls =
   "flex items-center gap-1 rounded-lg bg-blush-500 px-3 py-2 text-sm font-semibold text-white hover:bg-blush-600";
+
+function Profile() {
+  const { user } = useAuth();
+  const { displayName, setDisplayName } = useSettings();
+  const { notify } = useToast();
+  const [draft, setDraft] = useState(displayName || user?.displayName || "");
+
+  useEffect(() => {
+    setDraft(displayName || user?.displayName || "");
+  }, [displayName, user?.displayName]);
+
+  const save = () => {
+    const next = draft.trim();
+    if (!next || next === (displayName || user?.displayName)) return;
+    setDisplayName(next);
+    notify("บันทึกชื่อที่แสดงแล้ว");
+  };
+
+  return (
+    <Card icon={<User className="h-5 w-5" />} title="โปรไฟล์">
+      <div className="flex flex-wrap items-center gap-3">
+        {user?.photoURL && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={user.photoURL}
+            alt={draft}
+            className="h-12 w-12 rounded-full border border-blush-200 dark:border-plum-800"
+            referrerPolicy="no-referrer"
+          />
+        )}
+        <div className="flex flex-1 flex-wrap gap-2">
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="ชื่อที่แสดง"
+            className={`${inputCls} flex-1`}
+          />
+          <button onClick={save} className={btnCls}>
+            บันทึก
+          </button>
+        </div>
+      </div>
+      <p className="mt-2 text-xs text-blush-400">
+        อีเมล: {user?.email ?? "-"}
+      </p>
+    </Card>
+  );
+}
+
+function PinLock() {
+  const { pinHash, setPinHash } = useSettings();
+  const { notify } = useToast();
+  const [pin, setPinInput] = useState("");
+  const [confirm, setConfirm] = useState("");
+
+  const save = async () => {
+    if (pin.length < 4) {
+      notify("PIN ต้องมีอย่างน้อย 4 หลัก", "error");
+      return;
+    }
+    if (pin !== confirm) {
+      notify("PIN ทั้งสองช่องไม่ตรงกัน", "error");
+      return;
+    }
+    setPinHash(await hashPin(pin));
+    setPinInput("");
+    setConfirm("");
+    notify("ตั้ง PIN แล้ว");
+  };
+
+  const remove = () => {
+    setPinHash("");
+    notify("ปิดล็อก PIN แล้ว", "info");
+  };
+
+  return (
+    <Card icon={<Lock className="h-5 w-5" />} title="ล็อกด้วย PIN">
+      {pinHash ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className="text-sm text-blush-600 dark:text-blush-300">
+            ตั้ง PIN ไว้แล้ว — ต้องใส่รหัสทุกครั้งที่เปิดแอปใหม่
+          </span>
+          <button
+            onClick={remove}
+            className="rounded-lg border border-rose-200 px-3 py-1.5 text-sm font-medium text-rose-500 hover:bg-rose-50"
+          >
+            ปิด PIN
+          </button>
+        </div>
+      ) : (
+        <p className="mb-3 text-sm text-blush-400">
+          ยังไม่ได้ตั้ง PIN — ตั้งไว้กันคนอื่นเปิดแอปดูข้อมูลการเงิน
+        </p>
+      )}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <input
+          type="password"
+          inputMode="numeric"
+          maxLength={8}
+          value={pin}
+          onChange={(e) => setPinInput(e.target.value)}
+          placeholder="PIN ใหม่ (4+ หลัก)"
+          className={inputCls}
+        />
+        <input
+          type="password"
+          inputMode="numeric"
+          maxLength={8}
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          placeholder="ยืนยัน PIN"
+          className={inputCls}
+        />
+        <button onClick={save} className={btnCls}>
+          {pinHash ? "เปลี่ยน PIN" : "ตั้ง PIN"}
+        </button>
+      </div>
+    </Card>
+  );
+}
+
+function BackupRestore() {
+  const { user } = useAuth();
+  const { notify } = useToast();
+  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<BackupPayload | null>(null);
+
+  const doExport = async () => {
+    if (!user) return;
+    setBusy(true);
+    try {
+      const payload = await exportBackup(user.uid);
+      downloadBackup(payload);
+      notify("ดาวน์โหลดไฟล์สำรองข้อมูลแล้ว");
+    } catch {
+      notify("สำรองข้อมูลไม่สำเร็จ", "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const pickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text) as BackupPayload;
+      if (!data || typeof data !== "object" || !("version" in data)) {
+        notify("ไฟล์นี้ไม่ใช่ไฟล์สำรองข้อมูลของ Rubjai", "error");
+        return;
+      }
+      setPending(data);
+    } catch {
+      notify("อ่านไฟล์ไม่สำเร็จ ตรวจสอบว่าเป็นไฟล์ JSON ที่ถูกต้อง", "error");
+    }
+  };
+
+  const doImport = async () => {
+    if (!user || !pending) return;
+    setBusy(true);
+    try {
+      await importBackup(user.uid, pending);
+      notify("นำเข้าข้อมูลสำเร็จ");
+    } catch {
+      notify("นำเข้าข้อมูลไม่สำเร็จ", "error");
+    } finally {
+      setBusy(false);
+      setPending(null);
+    }
+  };
+
+  return (
+    <Card icon={<Download className="h-5 w-5" />} title="สำรอง / กู้คืนข้อมูล (JSON)">
+      <p className="mb-3 text-sm text-blush-400">
+        ดาวน์โหลดข้อมูลทั้งหมดเก็บไว้ หรือย้ายไปเครื่องใหม่ได้
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <button onClick={doExport} disabled={busy} className={btnCls}>
+          <Download className="h-4 w-4" /> ดาวน์โหลดข้อมูล
+        </button>
+        <label className={`${btnCls} cursor-pointer bg-white dark:bg-plum-800 text-blush-700 dark:text-blush-200 border border-blush-200 dark:border-plum-800`}>
+          <Upload className="h-4 w-4" /> นำเข้าไฟล์
+          <input
+            type="file"
+            accept="application/json"
+            onChange={pickFile}
+            disabled={busy}
+            className="hidden"
+          />
+        </label>
+      </div>
+
+      <ConfirmDialog
+        open={!!pending}
+        title="นำเข้าข้อมูล"
+        message="จะเพิ่มข้อมูลทั้งหมดจากไฟล์เข้าไปในบัญชีนี้ (ไม่ลบของเดิม) ต้องการดำเนินการต่อหรือไม่?"
+        confirmLabel="นำเข้า"
+        danger={false}
+        onConfirm={doImport}
+        onClose={() => setPending(null)}
+      />
+    </Card>
+  );
+}
+
+function NotificationSettings() {
+  const { notify } = useToast();
+  const [perm, setPerm] = useState<NotificationPermission | "unsupported">(
+    "default"
+  );
+
+  useEffect(() => {
+    setPerm(notifyPermission());
+  }, []);
+
+  const enable = async () => {
+    const p = await requestNotifyPermission();
+    setPerm(p);
+    if (p === "granted") notify("เปิดแจ้งเตือนแล้ว");
+    else if (p === "denied") notify("ไม่ได้รับอนุญาตแจ้งเตือน", "error");
+  };
+
+  return (
+    <Card icon={<Bell className="h-5 w-5" />} title="แจ้งเตือน">
+      <p className="mb-3 text-sm text-blush-400">
+        เตือนงบสัปดาห์ใกล้หมด และหนี้ใกล้ครบกำหนด — ทำงานเฉพาะตอนเปิดแอปอยู่เท่านั้น
+      </p>
+      {perm === "unsupported" ? (
+        <p className="text-sm text-blush-400">เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน</p>
+      ) : perm === "granted" ? (
+        <span className="text-sm font-medium text-emerald-600">
+          เปิดแจ้งเตือนอยู่
+        </span>
+      ) : perm === "denied" ? (
+        <span className="text-sm text-rose-500">
+          ถูกบล็อกแจ้งเตือน — ไปเปิดเองในตั้งค่าเบราว์เซอร์
+        </span>
+      ) : (
+        <button onClick={enable} className={btnCls}>
+          <Bell className="h-4 w-4" /> เปิดแจ้งเตือน
+        </button>
+      )}
+    </Card>
+  );
+}
 
 function Appearance() {
   const { theme, toggleTheme, currency, setCurrency } = useSettings();

@@ -6,6 +6,7 @@ import { SettingsProvider } from "@/lib/settings-context";
 import { DataProvider } from "@/lib/data-context";
 import { ToastProvider } from "@/components/ToastProvider";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+import { PinGate } from "@/components/PinGate";
 
 const notoThai = Noto_Sans_Thai({
   subsets: ["thai", "latin"],
@@ -39,7 +40,9 @@ export default function RootLayout({
         <AuthProvider>
           <SettingsProvider>
             <DataProvider>
-              <ToastProvider>{children}</ToastProvider>
+              <ToastProvider>
+                <PinGate>{children}</PinGate>
+              </ToastProvider>
             </DataProvider>
           </SettingsProvider>
           <ServiceWorkerRegister />

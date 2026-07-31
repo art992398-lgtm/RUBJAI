@@ -17,19 +17,30 @@ type Theme = "light" | "dark";
 interface Settings {
   currency: string;
   theme: Theme;
+  displayName: string;
+  pinHash: string; // empty = no PIN set
 }
 
 interface SettingsValue extends Settings {
   setCurrency: (c: string) => void;
   toggleTheme: () => void;
+  setDisplayName: (n: string) => void;
+  setPinHash: (h: string) => void;
 }
 
-const DEFAULTS: Settings = { currency: "THB", theme: "light" };
+const DEFAULTS: Settings = {
+  currency: "THB",
+  theme: "light",
+  displayName: "",
+  pinHash: "",
+};
 
 const SettingsContext = createContext<SettingsValue>({
   ...DEFAULTS,
   setCurrency: () => {},
   toggleTheme: () => {},
+  setDisplayName: () => {},
+  setPinHash: () => {},
 });
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
@@ -48,6 +59,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setSettings({
         currency: data?.currency ?? DEFAULTS.currency,
         theme: data?.theme ?? DEFAULTS.theme,
+        displayName: data?.displayName ?? DEFAULTS.displayName,
+        pinHash: data?.pinHash ?? DEFAULTS.pinHash,
       });
     });
   }, [user]);
@@ -74,6 +87,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         setCurrency: (c) => persist({ currency: c }),
         toggleTheme: () =>
           persist({ theme: settings.theme === "dark" ? "light" : "dark" }),
+        setDisplayName: (n) => persist({ displayName: n }),
+        setPinHash: (h) => persist({ pinHash: h }),
       }}
     >
       {children}

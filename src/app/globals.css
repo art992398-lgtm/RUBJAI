@@ -97,7 +97,6 @@ body {
   60% { transform: scale(1.08); }
   100% { transform: scale(1); opacity: 1; }
 }
-
 .animate-fade { animation: fadeIn 0.18s ease-out; }
 .animate-scale { animation: scaleIn 0.22s cubic-bezier(0.22, 1, 0.36, 1); }
 .animate-sheet { animation: sheetUp 0.28s cubic-bezier(0.22, 1, 0.36, 1); }

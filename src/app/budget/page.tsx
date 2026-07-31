@@ -17,6 +17,7 @@ import { WeekBudgetCard } from "@/components/WeekBudgetCard";
 import { CategoryBudgetBars } from "@/components/CategoryBudgetBars";
 import { subscribeTransactions } from "@/lib/transactions";
 import { subscribeBudgets, setBudget, type BudgetMap } from "@/lib/budgets";
+import { notifyBrowser } from "@/lib/notify";
 import type { Transaction } from "@/lib/types";
 import { weeksOfMonth, weekKeyOf, monthLabel, isCurrentWeek } from "@/lib/week";
 import { formatBaht } from "@/lib/format";
@@ -97,9 +98,11 @@ export default function BudgetPage() {
     if (pct >= 100) {
       alerted.current = true;
       notify("ใช้เงินเกินงบสัปดาห์นี้แล้ว", "error");
+      notifyBrowser("เกินงบสัปดาห์นี้แล้ว", "ใช้จ่ายเกินงบที่ตั้งไว้ของสัปดาห์นี้");
     } else if (pct >= 80) {
       alerted.current = true;
       notify("ใช้งบสัปดาห์นี้เกิน 80% แล้ว ระวังหน่อย", "info");
+      notifyBrowser("งบสัปดาห์นี้ใกล้หมด", "ใช้ไปแล้วเกิน 80% ของงบสัปดาห์นี้");
     }
   }, [weeks, budgets, spentByWeek, notify]);
 
