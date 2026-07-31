@@ -19,12 +19,14 @@ import { subscribeDebts } from "@/lib/debts";
 import { accountBalances } from "@/lib/balances";
 import { postDueRecurring } from "@/lib/recurring";
 import { exportTransactionsCsv } from "@/lib/exporters";
+import { exportNodeAsPdf } from "@/lib/pdfExport";
 import {
   weekKeyOf,
   todayIso as weekTodayIso,
   daysLeftInWeek,
   fromIso,
   toIso,
+  monthLabel,
 } from "@/lib/week";
 import { formatMoney } from "@/lib/format";
 import { notifyBrowser } from "@/lib/notify";
@@ -40,6 +42,7 @@ import { SummaryCards } from "@/components/SummaryCards";
 import { HomeWidget } from "@/components/HomeWidget";
 import { AccountBalances } from "@/components/AccountBalances";
 import { MonthCompare } from "@/components/MonthCompare";
+import { MonthlyReportTemplate } from "@/components/MonthlyReportTemplate";
 import { TransactionForm } from "@/components/TransactionForm";
 import { TransferForm } from "@/components/TransferForm";
 import { TransactionList } from "@/components/TransactionList";
@@ -64,6 +67,8 @@ export default function Dashboard() {
   const [transferOpen, setTransferOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Transaction | null>(null);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const reportRef = useRef<HTMLDivElement>(null);
 
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -189,6 +194,23 @@ export default function Dashboard() {
     [rows, transfers]
   );
 
+  const reportCategories = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const r of monthRows) {
+      if (r.type !== "expense") continue;
+      m[r.category] = (m[r.category] ?? 0) + r.amount;
+    }
+    return Object.entries(m)
+      .map(([key, amount]) => ({ label: labelOf(key), amount }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 6);
+  }, [monthRows, labelOf]);
+
+  const reportAccounts = useMemo(
+    () => accounts.map((a) => ({ name: a.name, balance: balances[a.id] ?? 0 })),
+    [accounts, balances]
+  );
+
   const thisWeekKey = useMemo(() => weekKeyOf(weekTodayIso()), []);
   const thisWeekLimit = budgets[thisWeekKey] ?? 0;
   const thisWeekSpent = useMemo(
@@ -206,6 +228,19 @@ export default function Dashboard() {
     return toIso(new Date(d.getFullYear(), d.getMonth(), endDay));
   }, [thisWeekKey]);
   const thisWeekDaysLeft = daysLeftInWeek(thisWeekKey, thisWeekEnd);
+
+  const noteSuggestions = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const r of rows) {
+      if (r.note && !seen.has(r.note)) {
+        seen.add(r.note);
+        out.push(r.note);
+      }
+      if (out.length >= 20) break;
+    }
+    return out;
+  }, [rows]);
 
   const totalSavings = useMemo(
     () => savings.reduce((s, r) => s + (r.type === "in" ? r.amount : -r.amount), 0),
@@ -267,6 +302,19 @@ export default function Dashboard() {
     notify("ดาวน์โหลด CSV แล้ว");
   };
 
+  const doExportPdf = async () => {
+    if (!reportRef.current) return;
+    setExportingPdf(true);
+    try {
+      await exportNodeAsPdf(reportRef.current, `rubjai-report-${monthKey}.pdf`);
+      notify("ดาวน์โหลดรายงาน PDF แล้ว");
+    } catch {
+      notify("สร้าง PDF ไม่สำเร็จ", "error");
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
   if (loading || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -309,7 +357,7 @@ export default function Dashboard() {
 
         <div className="grid gap-6 lg:grid-cols-[360px_1fr] lg:items-start">
           <div className="hidden space-y-6 lg:block">
-            <TransactionForm onSubmit={handleAdd} />
+            <TransactionForm onSubmit={handleAdd} noteSuggestions={noteSuggestions} />
           </div>
 
           <div className="space-y-4">
@@ -320,6 +368,8 @@ export default function Dashboard() {
               filters={filters}
               onFilters={setFilters}
               onExport={doExport}
+              onExportPdf={doExportPdf}
+              exportingPdf={exportingPdf}
             />
 
             <div className="flex items-center justify-between">
@@ -359,7 +409,7 @@ export default function Dashboard() {
 
       {/* add modal (mobile) */}
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="เพิ่มรายการใหม่">
-        <TransactionForm onSubmit={handleAdd} embedded />
+        <TransactionForm onSubmit={handleAdd} embedded noteSuggestions={noteSuggestions} />
       </Modal>
 
       {/* transfer modal */}
@@ -410,6 +460,7 @@ export default function Dashboard() {
             onSubmit={handleUpdate}
             initial={editing}
             embedded
+            noteSuggestions={noteSuggestions}
           />
         )}
       </Modal>
@@ -426,6 +477,22 @@ export default function Dashboard() {
         confirmLabel="ลบ"
         onConfirm={confirmDelete}
         onClose={() => setPendingDelete(null)}
+      />
+
+      {/* off-screen node captured for PDF export */}
+      <MonthlyReportTemplate
+        ref={reportRef}
+        monthLabel={monthLabel(year, month0)}
+        income={totals.income}
+        expense={totals.expense}
+        balance={totals.balance}
+        categories={reportCategories}
+        accounts={reportAccounts}
+        generatedAt={new Date().toLocaleDateString("th-TH", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        })}
       />
     </div>
   );

@@ -5,6 +5,7 @@ import {
   ChevronRight,
   Search,
   Download,
+  FileText,
   Filter,
 } from "lucide-react";
 import { useData } from "@/lib/data-context";
@@ -25,6 +26,8 @@ interface Props {
   filters: Filters;
   onFilters: (f: Filters) => void;
   onExport: () => void;
+  onExportPdf: () => void;
+  exportingPdf?: boolean;
 }
 
 export function FilterBar({
@@ -34,6 +37,8 @@ export function FilterBar({
   filters,
   onFilters,
   onExport,
+  onExportPdf,
+  exportingPdf,
 }: Props) {
   const { categoriesForType, accounts } = useData();
   const cats =
@@ -69,13 +74,25 @@ export function FilterBar({
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
-        <button
-          onClick={onExport}
-          className="flex items-center gap-1.5 rounded-lg border border-blush-200 dark:border-plum-800 bg-white dark:bg-plum-800 px-3 py-1.5 text-sm font-medium text-blush-700 dark:text-blush-200 hover:bg-blush-50"
-        >
-          <Download className="h-4 w-4" />
-          <span className="hidden sm:inline">Export CSV</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onExport}
+            className="flex items-center gap-1.5 rounded-lg border border-blush-200 dark:border-plum-800 bg-white dark:bg-plum-800 px-3 py-1.5 text-sm font-medium text-blush-700 dark:text-blush-200 hover:bg-blush-50"
+          >
+            <Download className="h-4 w-4" />
+            <span className="hidden sm:inline">CSV</span>
+          </button>
+          <button
+            onClick={onExportPdf}
+            disabled={exportingPdf}
+            className="flex items-center gap-1.5 rounded-lg border border-blush-200 dark:border-plum-800 bg-white dark:bg-plum-800 px-3 py-1.5 text-sm font-medium text-blush-700 dark:text-blush-200 hover:bg-blush-50 disabled:opacity-60"
+          >
+            <FileText className="h-4 w-4" />
+            <span className="hidden sm:inline">
+              {exportingPdf ? "กำลังสร้าง..." : "รายงาน PDF"}
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* search */}

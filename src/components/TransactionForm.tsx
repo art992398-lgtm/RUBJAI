@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
   Plus,
   Check,
@@ -20,6 +20,7 @@ interface Props {
   initial?: Transaction | null;
   embedded?: boolean;
   submitLabel?: string;
+  noteSuggestions?: string[];
 }
 
 export function TransactionForm({
@@ -27,8 +28,10 @@ export function TransactionForm({
   initial = null,
   embedded = false,
   submitLabel,
+  noteSuggestions = [],
 }: Props) {
   const { categoriesForType, accounts } = useData();
+  const noteListId = useId();
 
   const [type, setType] = useState<TxType>(initial?.type ?? "expense");
   const [date, setDate] = useState(initial?.date ?? todayIso());
@@ -201,7 +204,15 @@ export function TransactionForm({
             onChange={(e) => setNote(e.target.value)}
             placeholder="เช่น เงินสด / โอน / บัตรเครดิต"
             className="input"
+            list={noteListId}
           />
+          {noteSuggestions.length > 0 && (
+            <datalist id={noteListId}>
+              {noteSuggestions.map((n) => (
+                <option key={n} value={n} />
+              ))}
+            </datalist>
+          )}
         </Field>
 
         {/* receipt */}
