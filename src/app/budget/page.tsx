@@ -72,9 +72,9 @@ export default function BudgetPage() {
     [rows, monthKey]
   );
 
-  // spend per week — full Mon–Sun week. Each week belongs to exactly one
-  // month (weeksOfMonth uses the Thursday rule), so summing the shown weeks
-  // never double-counts a boundary week across two months.
+  // spend per week — 7-day block anchored to day 1 of month. Each week
+  // belongs to exactly one month, so summing the shown weeks never
+  // double-counts a boundary week across two months.
   const spentByWeek = useMemo(() => {
     const m: Record<string, number> = {};
     for (const r of rows) {

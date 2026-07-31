@@ -1,4 +1,5 @@
-// Week = Monday..Sunday. Week key = Monday's local date (YYYY-MM-DD).
+// Week = 7-day block anchored to day 1 of month (1-7, 8-14, 15-21, 22-28, 29-end).
+// Week key = block start date (YYYY-MM-DD).
 
 const THAI_MONTHS = [
   "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
@@ -11,12 +12,12 @@ const THAI_MONTHS_FULL = [
 ];
 
 export interface WeekInfo {
-  key: string; // Monday YYYY-MM-DD
+  key: string; // block start YYYY-MM-DD
   index: number; // 1-based within month
-  start: string; // Monday YYYY-MM-DD
-  end: string; // Sunday YYYY-MM-DD
+  start: string; // block start YYYY-MM-DD
+  end: string; // block end YYYY-MM-DD
   label: string; // "สัปดาห์ที่ 1"
-  range: string; // "28 ก.ค. – 3 ส.ค."
+  range: string; // "1 ส.ค. – 7 ส.ค."
 }
 
 function pad(n: number) {
@@ -38,50 +39,38 @@ export function addDays(d: Date, n: number): Date {
   return x;
 }
 
-// Monday of the week containing d
-export function mondayOf(d: Date): Date {
-  const day = d.getDay(); // 0=Sun..6=Sat
-  const offset = (day + 6) % 7; // Mon=0
-  return addDays(d, -offset);
-}
-
 function shortDay(d: Date): string {
   return `${d.getDate()} ${THAI_MONTHS[d.getMonth()]}`;
 }
 
-// Mon..Sun weeks that BELONG to the given month.
-// A week belongs to the month that contains its Thursday (the week's majority),
-// so every calendar week maps to exactly ONE month — no boundary week is
-// counted in two months.
+// 7-day blocks starting day 1 of the month; last block is whatever's left
+// (3-7 days depending on month length). Every block stays inside one month,
+// so there's no cross-month boundary week to worry about.
 export function weeksOfMonth(year: number, month0: number): WeekInfo[] {
-  const first = new Date(year, month0, 1);
-  const last = new Date(year, month0 + 1, 0);
-  let cursor = mondayOf(first);
+  const lastDay = new Date(year, month0 + 1, 0).getDate();
   const weeks: WeekInfo[] = [];
   let idx = 1;
-  while (cursor <= last) {
-    const thursday = addDays(cursor, 3);
-    if (thursday.getFullYear() === year && thursday.getMonth() === month0) {
-      const start = cursor;
-      const end = addDays(cursor, 6);
-      weeks.push({
-        key: toIso(start),
-        index: idx,
-        start: toIso(start),
-        end: toIso(end),
-        label: `สัปดาห์ที่ ${idx}`,
-        range: `${shortDay(start)} – ${shortDay(end)}`,
-      });
-      idx++;
-    }
-    cursor = addDays(cursor, 7);
+  for (let day = 1; day <= lastDay; day += 7) {
+    const start = new Date(year, month0, day);
+    const end = new Date(year, month0, Math.min(day + 6, lastDay));
+    weeks.push({
+      key: toIso(start),
+      index: idx,
+      start: toIso(start),
+      end: toIso(end),
+      label: `สัปดาห์ที่ ${idx}`,
+      range: `${shortDay(start)} – ${shortDay(end)}`,
+    });
+    idx++;
   }
   return weeks;
 }
 
 // which week key a transaction date belongs to
 export function weekKeyOf(iso: string): string {
-  return toIso(mondayOf(fromIso(iso)));
+  const d = fromIso(iso);
+  const blockStartDay = Math.floor((d.getDate() - 1) / 7) * 7 + 1;
+  return toIso(new Date(d.getFullYear(), d.getMonth(), blockStartDay));
 }
 
 export function monthLabel(year: number, month0: number): string {
