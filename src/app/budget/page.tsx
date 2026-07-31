@@ -75,16 +75,19 @@ export default function BudgetPage() {
 
   // spend per week — 7-day block anchored to day 1 of month. Each week
   // belongs to exactly one month, so summing the shown weeks never
-  // double-counts a boundary week across two months.
+  // double-counts a boundary week across two months. Categories that have
+  // their own monthly category budget (below) are tracked there instead —
+  // they don't also eat into the weekly budget.
   const spentByWeek = useMemo(() => {
     const m: Record<string, number> = {};
     for (const r of rows) {
       if (r.type !== "expense") continue;
+      if (categoryBudgets[r.category] > 0) continue;
       const k = weekKeyOf(r.date);
       m[k] = (m[k] ?? 0) + r.amount;
     }
     return m;
-  }, [rows]);
+  }, [rows, categoryBudgets]);
 
   // alert once when current week crosses 80% / 100%
   useEffect(() => {

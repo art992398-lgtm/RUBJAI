@@ -55,7 +55,7 @@ export default function Dashboard() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const { notify } = useToast();
-  const { recurring, labelOf, accountName, accounts } = useData();
+  const { recurring, labelOf, accountName, accounts, categoryBudgets } = useData();
 
   const [rows, setRows] = useState<Transaction[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
@@ -216,9 +216,14 @@ export default function Dashboard() {
   const thisWeekSpent = useMemo(
     () =>
       rows
-        .filter((r) => r.type === "expense" && weekKeyOf(r.date) === thisWeekKey)
+        .filter(
+          (r) =>
+            r.type === "expense" &&
+            weekKeyOf(r.date) === thisWeekKey &&
+            !(categoryBudgets[r.category] > 0) // has its own monthly budget -> not part of the week budget
+        )
         .reduce((s, r) => s + r.amount, 0),
-    [rows, thisWeekKey]
+    [rows, thisWeekKey, categoryBudgets]
   );
 
   const thisWeekEnd = useMemo(() => {
