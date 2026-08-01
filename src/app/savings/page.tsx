@@ -47,6 +47,7 @@ export default function SavingsPage() {
   const [goalDraft, setGoalDraft] = useState("");
 
   const [collectTarget, setCollectTarget] = useState<{ key: string; net: number } | null>(null);
+  const [collectAmount, setCollectAmount] = useState("");
   const [collectTo, setCollectTo] = useState("");
   // amount pulled from each source account, keyed by account id
   const [collectAllocations, setCollectAllocations] = useState<Record<string, string>>({});
@@ -129,6 +130,7 @@ export default function SavingsPage() {
 
   const openCollect = (key: string, net: number) => {
     setCollectTarget({ key, net });
+    setCollectAmount(String(net));
     const to = savingsAccount?.id ?? accounts[1]?.id ?? accounts[0]?.id ?? "";
     setCollectTo(to);
     // one obvious source account -> prefill the full amount there; otherwise
@@ -140,6 +142,7 @@ export default function SavingsPage() {
     );
   };
 
+  const collectAmountNum = parseFloat(collectAmount) || 0;
   const collectSources = accounts.filter((a) => a.id !== collectTo);
   const collectAllocatedTotal = collectSources.reduce(
     (s, a) => s + (parseFloat(collectAllocations[a.id]) || 0),
@@ -150,11 +153,15 @@ export default function SavingsPage() {
   );
 
   const confirmCollect = async () => {
-    if (!user || !collectTarget || collectTarget.net <= 0) return;
-    const { key, net } = collectTarget;
-    const matchesNet = Math.abs(collectAllocatedTotal - net) < 0.005;
-    if (collectAllocatedTotal > 0 && !matchesNet) {
-      notify(`ยอดที่แบ่งจากบัญชี (${formatMoney(collectAllocatedTotal)}) ต้องเท่ากับเงินเหลือ (${formatMoney(net)})`, "error");
+    if (!user || !collectTarget) return;
+    const { key } = collectTarget;
+    if (collectAmountNum <= 0) {
+      notify("กรอกจำนวนเงินที่จะเก็บให้ถูกต้อง", "error");
+      return;
+    }
+    const matchesAmount = Math.abs(collectAllocatedTotal - collectAmountNum) < 0.005;
+    if (collectAllocatedTotal > 0 && !matchesAmount) {
+      notify(`ยอดที่แบ่งจากบัญชี (${formatMoney(collectAllocatedTotal)}) ต้องเท่ากับจำนวนที่จะเก็บ (${formatMoney(collectAmountNum)})`, "error");
       return;
     }
     if (collectOverAllocated) {
@@ -167,8 +174,8 @@ export default function SavingsPage() {
     const note = `เงินเหลือ${monthLabel(y, mo - 1)}`;
     setCollecting(true);
     try {
-      await addSaving(user.uid, { amount: net, type: "in", date, month: key, note });
-      if (collectTo && matchesNet) {
+      await addSaving(user.uid, { amount: collectAmountNum, type: "in", date, month: key, note });
+      if (collectTo && matchesAmount) {
         for (const a of collectSources) {
           const amt = parseFloat(collectAllocations[a.id]) || 0;
           if (amt <= 0) continue;
@@ -181,7 +188,7 @@ export default function SavingsPage() {
           });
         }
       }
-      notify("เก็บเงินเหลือเข้าออมแล้ว");
+      notify("เก็บเงินเข้าออมแล้ว");
       setCollectTarget(null);
     } finally {
       setCollecting(false);
@@ -426,9 +433,19 @@ export default function SavingsPage() {
       >
         {collectTarget && (
           <div className="grid gap-3">
-            <p className="text-sm text-blush-600 dark:text-blush-300">
-              เก็บ <b className="text-blush-800 dark:text-blush-100">{formatMoney(collectTarget.net)}</b> เข้าออม
-            </p>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-blush-600 dark:text-blush-300">
+                จำนวนที่จะเก็บ (เงินเหลือทั้งหมด {formatMoney(collectTarget.net)})
+              </span>
+              <input
+                type="number"
+                min="0"
+                max={collectTarget.net}
+                value={collectAmount}
+                onChange={(e) => setCollectAmount(e.target.value)}
+                className={inputCls + " w-full"}
+              />
+            </label>
 
             {accounts.length > 0 && (
               <>
@@ -492,7 +509,7 @@ export default function SavingsPage() {
                         collectOverAllocated
                           ? "text-rose-500"
                           : collectAllocatedTotal > 0 &&
-                            Math.abs(collectAllocatedTotal - collectTarget.net) < 0.005
+                            Math.abs(collectAllocatedTotal - collectAmountNum) < 0.005
                           ? "text-emerald-600"
                           : "text-blush-500"
                       }`}
@@ -500,7 +517,7 @@ export default function SavingsPage() {
                       {collectOverAllocated
                         ? "มีบัญชีที่ดึงเงินเกินยอดคงเหลือ"
                         : `แบ่งแล้ว ${formatMoney(collectAllocatedTotal)} / ${formatMoney(
-                            collectTarget.net
+                            collectAmountNum
                           )}`}
                     </div>
                   </div>
@@ -519,9 +536,10 @@ export default function SavingsPage() {
                 onClick={confirmCollect}
                 disabled={
                   collecting ||
+                  collectAmountNum <= 0 ||
                   collectOverAllocated ||
                   (collectAllocatedTotal > 0 &&
-                    Math.abs(collectAllocatedTotal - collectTarget.net) >= 0.005)
+                    Math.abs(collectAllocatedTotal - collectAmountNum) >= 0.005)
                 }
                 className="flex items-center justify-center gap-2 rounded-xl bg-blush-500 py-2.5 font-semibold text-white shadow-soft hover:bg-blush-600 disabled:opacity-60"
               >
