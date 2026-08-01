@@ -562,13 +562,14 @@ function CategoryBudgets() {
 }
 
 function Recurring() {
-  const { recurring, addRecurring, removeRecurring, categoriesForType } =
+  const { recurring, addRecurring, removeRecurring, categoriesForType, accounts, accountName } =
     useData();
   const { notify } = useToast();
   const [type, setType] = useState<TxType>("expense");
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [day, setDay] = useState("1");
+  const [accountId, setAccountId] = useState("");
   const cats = categoriesForType(type);
   const [category, setCategory] = useState(cats[0]?.key ?? "");
 
@@ -582,6 +583,7 @@ function Recurring() {
       category: category || categoriesForType(type)[0].key,
       amount: amt,
       dayOfMonth: Math.min(Math.max(1, d || 1), 31),
+      ...(accountId ? { accountId } : {}),
     });
     setDescription("");
     setAmount("");
@@ -605,7 +607,8 @@ function Recurring() {
               {r.description}{" "}
               <span className="text-xs text-blush-400">
                 ({r.type === "income" ? "+" : "-"}
-                {formatMoney(r.amount)} · ทุกวันที่ {r.dayOfMonth})
+                {formatMoney(r.amount)} · ทุกวันที่ {r.dayOfMonth}
+                {accountName(r.accountId) ? ` · ${accountName(r.accountId)}` : ""})
               </span>
             </span>
             <button
@@ -667,7 +670,21 @@ function Recurring() {
             className={`${inputCls} w-20`}
           />
         </label>
-        <button onClick={add} className={`${btnCls} justify-center`}>
+        {accounts.length > 0 && (
+          <select
+            value={accountId}
+            onChange={(e) => setAccountId(e.target.value)}
+            className={inputCls}
+          >
+            <option value="">— ไม่ระบุบัญชี —</option>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        )}
+        <button onClick={add} className={`${btnCls} justify-center sm:col-span-2`}>
           <Plus className="h-4 w-4" /> เพิ่มรายการประจำ
         </button>
       </div>
