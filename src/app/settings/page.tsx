@@ -35,7 +35,7 @@ import {
   notifyPermission,
   requestNotifyPermission,
 } from "@/lib/notify";
-import type { TxType } from "@/lib/types";
+import type { Account, TxType } from "@/lib/types";
 
 export default function SettingsPage() {
   const { user, loading } = useAuth();
@@ -391,7 +391,7 @@ function Accounts() {
   const { accounts, addAccount, removeAccount } = useData();
   const { notify } = useToast();
   const [name, setName] = useState("");
-  const [kind, setKind] = useState<"cash" | "bank" | "card" | "other">("cash");
+  const [kind, setKind] = useState<Account["kind"]>("cash");
 
   const add = async () => {
     if (!name.trim()) return;
@@ -400,10 +400,11 @@ function Accounts() {
     notify("เพิ่มบัญชีแล้ว");
   };
 
-  const KIND_LABEL: Record<string, string> = {
+  const KIND_LABEL: Record<Account["kind"], string> = {
     cash: "เงินสด",
     bank: "ธนาคาร",
     card: "บัตร",
+    savings: "เงินออม",
     other: "อื่นๆ",
   };
 
@@ -449,6 +450,7 @@ function Accounts() {
           <option value="cash">เงินสด</option>
           <option value="bank">ธนาคาร</option>
           <option value="card">บัตร</option>
+          <option value="savings">เงินออม</option>
           <option value="other">อื่นๆ</option>
         </select>
         <button onClick={add} className={btnCls}>

@@ -1,6 +1,13 @@
 "use client";
 
-import { Wallet, Landmark, CreditCard, CircleDollarSign, ArrowLeftRight } from "lucide-react";
+import {
+  Wallet,
+  Landmark,
+  CreditCard,
+  PiggyBank,
+  CircleDollarSign,
+  ArrowLeftRight,
+} from "lucide-react";
 import { formatMoney } from "@/lib/format";
 import type { Account } from "@/lib/types";
 
@@ -8,6 +15,7 @@ const KIND_ICON: Record<Account["kind"], React.ReactNode> = {
   cash: <Wallet className="h-5 w-5" />,
   bank: <Landmark className="h-5 w-5" />,
   card: <CreditCard className="h-5 w-5" />,
+  savings: <PiggyBank className="h-5 w-5" />,
   other: <CircleDollarSign className="h-5 w-5" />,
 };
 

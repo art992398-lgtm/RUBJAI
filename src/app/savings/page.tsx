@@ -114,10 +114,16 @@ export default function SavingsPage() {
       .sort((a, b) => (a.key < b.key ? 1 : -1));
   }, [rows, collectedMonths]);
 
+  // account marked kind="savings" is the default destination/source for
+  // collect/withdraw — matches the "park leftover in my savings account"
+  // ritual most people actually do at month boundaries.
+  const savingsAccount = accounts.find((a) => a.kind === "savings");
+  const nonSavingsAccounts = accounts.filter((a) => a.id !== savingsAccount?.id);
+
   const openCollect = (key: string, net: number) => {
     setCollectTarget({ key, net });
-    setCollectFrom(accounts[0]?.id ?? "");
-    setCollectTo(accounts[1]?.id ?? accounts[0]?.id ?? "");
+    setCollectFrom(nonSavingsAccounts[0]?.id ?? accounts[0]?.id ?? "");
+    setCollectTo(savingsAccount?.id ?? accounts[1]?.id ?? accounts[0]?.id ?? "");
   };
 
   const confirmCollect = async () => {
@@ -148,8 +154,8 @@ export default function SavingsPage() {
 
   const openWithdraw = () => {
     setWithdraw("");
-    setWithdrawFrom(accounts[0]?.id ?? "");
-    setWithdrawTo(accounts[1]?.id ?? accounts[0]?.id ?? "");
+    setWithdrawFrom(savingsAccount?.id ?? accounts[0]?.id ?? "");
+    setWithdrawTo(nonSavingsAccounts[0]?.id ?? accounts[1]?.id ?? accounts[0]?.id ?? "");
     setWithdrawOpen(true);
   };
 

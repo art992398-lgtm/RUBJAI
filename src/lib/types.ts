@@ -16,7 +16,7 @@ export interface Transaction {
 export interface Account {
   id: string;
   name: string;
-  kind: "cash" | "bank" | "card" | "other";
+  kind: "cash" | "bank" | "card" | "savings" | "other";
 }
 
 export interface CustomCategory {
