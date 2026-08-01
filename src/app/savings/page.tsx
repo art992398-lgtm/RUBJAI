@@ -25,8 +25,9 @@ import {
   subscribeSavingsGoal,
   setSavingsGoal,
 } from "@/lib/savings";
-import { addTransfer } from "@/lib/transfers";
-import type { Saving, Transaction } from "@/lib/types";
+import { subscribeTransfers, addTransfer } from "@/lib/transfers";
+import { accountBalances } from "@/lib/balances";
+import type { Saving, Transaction, Transfer } from "@/lib/types";
 import { formatMoney, formatDateThai, todayIso } from "@/lib/format";
 import { monthLabel } from "@/lib/week";
 
@@ -39,14 +40,16 @@ export default function SavingsPage() {
   const router = useRouter();
   const { notify } = useToast();
   const [rows, setRows] = useState<Transaction[]>([]);
+  const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [savings, setSavings] = useState<Saving[]>([]);
   const [ready, setReady] = useState(false);
   const [goal, setGoal] = useState(0);
   const [goalDraft, setGoalDraft] = useState("");
 
   const [collectTarget, setCollectTarget] = useState<{ key: string; net: number } | null>(null);
-  const [collectFrom, setCollectFrom] = useState("");
   const [collectTo, setCollectTo] = useState("");
+  // amount pulled from each source account, keyed by account id
+  const [collectAllocations, setCollectAllocations] = useState<Record<string, string>>({});
   const [collecting, setCollecting] = useState(false);
 
   const [withdrawOpen, setWithdrawOpen] = useState(false);
@@ -78,12 +81,16 @@ export default function SavingsPage() {
       setGoal(g);
       setGoalDraft(g ? String(g) : "");
     });
+    const u4 = subscribeTransfers(user.uid, setTransfers);
     return () => {
       u1();
       u2();
       u3();
+      u4();
     };
   }, [user]);
+
+  const balances = useMemo(() => accountBalances(rows, transfers), [rows, transfers]);
 
   const pot = useMemo(
     () =>
@@ -122,13 +129,38 @@ export default function SavingsPage() {
 
   const openCollect = (key: string, net: number) => {
     setCollectTarget({ key, net });
-    setCollectFrom(nonSavingsAccounts[0]?.id ?? accounts[0]?.id ?? "");
-    setCollectTo(savingsAccount?.id ?? accounts[1]?.id ?? accounts[0]?.id ?? "");
+    const to = savingsAccount?.id ?? accounts[1]?.id ?? accounts[0]?.id ?? "";
+    setCollectTo(to);
+    // one obvious source account -> prefill the full amount there; otherwise
+    // leave blank so the user splits it across whichever accounts actually
+    // hold the leftover.
+    const sources = accounts.filter((a) => a.id !== to);
+    setCollectAllocations(
+      sources.length === 1 ? { [sources[0].id]: String(net) } : {}
+    );
   };
+
+  const collectSources = accounts.filter((a) => a.id !== collectTo);
+  const collectAllocatedTotal = collectSources.reduce(
+    (s, a) => s + (parseFloat(collectAllocations[a.id]) || 0),
+    0
+  );
+  const collectOverAllocated = collectSources.some(
+    (a) => (parseFloat(collectAllocations[a.id]) || 0) > (balances[a.id] ?? 0)
+  );
 
   const confirmCollect = async () => {
     if (!user || !collectTarget || collectTarget.net <= 0) return;
     const { key, net } = collectTarget;
+    const matchesNet = Math.abs(collectAllocatedTotal - net) < 0.005;
+    if (collectAllocatedTotal > 0 && !matchesNet) {
+      notify(`ยอดที่แบ่งจากบัญชี (${formatMoney(collectAllocatedTotal)}) ต้องเท่ากับเงินเหลือ (${formatMoney(net)})`, "error");
+      return;
+    }
+    if (collectOverAllocated) {
+      notify("มีบัญชีที่ดึงเงินเกินยอดคงเหลือ", "error");
+      return;
+    }
     const [y, mo] = key.split("-").map(Number);
     const lastDay = new Date(y, mo, 0).getDate();
     const date = `${key}-${String(lastDay).padStart(2, "0")}`;
@@ -136,14 +168,18 @@ export default function SavingsPage() {
     setCollecting(true);
     try {
       await addSaving(user.uid, { amount: net, type: "in", date, month: key, note });
-      if (collectFrom && collectTo && collectFrom !== collectTo) {
-        await addTransfer(user.uid, {
-          fromAccountId: collectFrom,
-          toAccountId: collectTo,
-          amount: net,
-          date,
-          note,
-        });
+      if (collectTo && matchesNet) {
+        for (const a of collectSources) {
+          const amt = parseFloat(collectAllocations[a.id]) || 0;
+          if (amt <= 0) continue;
+          await addTransfer(user.uid, {
+            fromAccountId: a.id,
+            toAccountId: collectTo,
+            amount: amt,
+            date,
+            note,
+          });
+        }
       }
       notify("เก็บเงินเหลือเข้าออมแล้ว");
       setCollectTarget(null);
@@ -398,24 +434,7 @@ export default function SavingsPage() {
               <>
                 <label className="block">
                   <span className="mb-1 flex items-center gap-1 text-xs font-medium text-blush-600 dark:text-blush-300">
-                    <Wallet className="h-3.5 w-3.5" /> โอนจากบัญชี (ไม่บังคับ)
-                  </span>
-                  <select
-                    value={collectFrom}
-                    onChange={(e) => setCollectFrom(e.target.value)}
-                    className={inputCls + " w-full"}
-                  >
-                    <option value="">— ไม่ระบุ —</option>
-                    {accounts.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="mb-1 flex items-center gap-1 text-xs font-medium text-blush-600 dark:text-blush-300">
-                    <Wallet className="h-3.5 w-3.5" /> เข้าบัญชีออม (ไม่บังคับ)
+                    <Wallet className="h-3.5 w-3.5" /> เข้าบัญชีออม
                   </span>
                   <select
                     value={collectTo}
@@ -430,10 +449,61 @@ export default function SavingsPage() {
                     ))}
                   </select>
                 </label>
-                {collectFrom && collectTo && collectFrom !== collectTo && (
-                  <p className="text-xs text-blush-400">
-                    จะโอนเงินจริงจาก {accountName(collectFrom)} ไป {accountName(collectTo)} ด้วย
-                  </p>
+
+                {collectTo && collectSources.length > 0 && (
+                  <div className="rounded-xl border border-blush-100 dark:border-plum-800 p-3">
+                    <span className="mb-2 flex items-center gap-1 text-xs font-medium text-blush-600 dark:text-blush-300">
+                      <Wallet className="h-3.5 w-3.5" /> ดึงเงินมาจากบัญชีไหนบ้าง (ไม่บังคับ)
+                    </span>
+                    <div className="grid gap-2">
+                      {collectSources.map((a) => {
+                        const amt = parseFloat(collectAllocations[a.id]) || 0;
+                        const bal = balances[a.id] ?? 0;
+                        const over = amt > bal;
+                        return (
+                          <div key={a.id} className="flex items-center gap-2">
+                            <span className="flex-1 text-sm text-blush-700 dark:text-blush-200">
+                              {a.name}
+                              <span className="ml-1 text-xs text-blush-400">
+                                (เหลือ {formatMoney(bal)})
+                              </span>
+                            </span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={collectAllocations[a.id] ?? ""}
+                              onChange={(e) =>
+                                setCollectAllocations((prev) => ({
+                                  ...prev,
+                                  [a.id]: e.target.value,
+                                }))
+                              }
+                              placeholder="0"
+                              className={`${inputCls} w-28 text-right ${
+                                over ? "border-rose-400" : ""
+                              }`}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div
+                      className={`mt-2 text-xs ${
+                        collectOverAllocated
+                          ? "text-rose-500"
+                          : collectAllocatedTotal > 0 &&
+                            Math.abs(collectAllocatedTotal - collectTarget.net) < 0.005
+                          ? "text-emerald-600"
+                          : "text-blush-500"
+                      }`}
+                    >
+                      {collectOverAllocated
+                        ? "มีบัญชีที่ดึงเงินเกินยอดคงเหลือ"
+                        : `แบ่งแล้ว ${formatMoney(collectAllocatedTotal)} / ${formatMoney(
+                            collectTarget.net
+                          )}`}
+                    </div>
+                  </div>
                 )}
               </>
             )}
@@ -447,7 +517,12 @@ export default function SavingsPage() {
               </button>
               <button
                 onClick={confirmCollect}
-                disabled={collecting}
+                disabled={
+                  collecting ||
+                  collectOverAllocated ||
+                  (collectAllocatedTotal > 0 &&
+                    Math.abs(collectAllocatedTotal - collectTarget.net) >= 0.005)
+                }
                 className="flex items-center justify-center gap-2 rounded-xl bg-blush-500 py-2.5 font-semibold text-white shadow-soft hover:bg-blush-600 disabled:opacity-60"
               >
                 {collecting ? <Loader2 className="h-4 w-4 animate-spin" /> : "ยืนยันเก็บ"}
