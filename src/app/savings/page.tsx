@@ -10,10 +10,13 @@ import {
   Trash2,
   Check,
   Target,
+  Wallet,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { useData } from "@/lib/data-context";
 import { useToast } from "@/components/ToastProvider";
 import { Navbar } from "@/components/Navbar";
+import { Modal } from "@/components/Modal";
 import { subscribeTransactions } from "@/lib/transactions";
 import {
   subscribeSavings,
@@ -22,20 +25,35 @@ import {
   subscribeSavingsGoal,
   setSavingsGoal,
 } from "@/lib/savings";
+import { addTransfer } from "@/lib/transfers";
 import type { Saving, Transaction } from "@/lib/types";
-import { formatMoney, formatDateThai } from "@/lib/format";
+import { formatMoney, formatDateThai, todayIso } from "@/lib/format";
 import { monthLabel } from "@/lib/week";
+
+const inputCls =
+  "rounded-lg border border-blush-200 dark:border-plum-800 bg-white dark:bg-plum-800 px-3 py-2 text-sm outline-none focus:border-blush-500";
 
 export default function SavingsPage() {
   const { user, loading } = useAuth();
+  const { accounts, accountName } = useData();
   const router = useRouter();
   const { notify } = useToast();
   const [rows, setRows] = useState<Transaction[]>([]);
   const [savings, setSavings] = useState<Saving[]>([]);
   const [ready, setReady] = useState(false);
-  const [withdraw, setWithdraw] = useState("");
   const [goal, setGoal] = useState(0);
   const [goalDraft, setGoalDraft] = useState("");
+
+  const [collectTarget, setCollectTarget] = useState<{ key: string; net: number } | null>(null);
+  const [collectFrom, setCollectFrom] = useState("");
+  const [collectTo, setCollectTo] = useState("");
+  const [collecting, setCollecting] = useState(false);
+
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [withdraw, setWithdraw] = useState("");
+  const [withdrawFrom, setWithdrawFrom] = useState("");
+  const [withdrawTo, setWithdrawTo] = useState("");
+  const [withdrawing, setWithdrawing] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/");
@@ -96,21 +114,46 @@ export default function SavingsPage() {
       .sort((a, b) => (a.key < b.key ? 1 : -1));
   }, [rows, collectedMonths]);
 
-  const collect = async (key: string, net: number) => {
-    if (!user || net <= 0) return;
-    const [y, mo] = key.split("-").map(Number);
-    const lastDay = new Date(y, mo, 0).getDate();
-    await addSaving(user.uid, {
-      amount: net,
-      type: "in",
-      date: `${key}-${String(lastDay).padStart(2, "0")}`,
-      month: key,
-      note: `เงินเหลือ${monthLabel(y, mo - 1)}`,
-    });
-    notify("เก็บเงินเหลือเข้าออมแล้ว");
+  const openCollect = (key: string, net: number) => {
+    setCollectTarget({ key, net });
+    setCollectFrom(accounts[0]?.id ?? "");
+    setCollectTo(accounts[1]?.id ?? accounts[0]?.id ?? "");
   };
 
-  const doWithdraw = async () => {
+  const confirmCollect = async () => {
+    if (!user || !collectTarget || collectTarget.net <= 0) return;
+    const { key, net } = collectTarget;
+    const [y, mo] = key.split("-").map(Number);
+    const lastDay = new Date(y, mo, 0).getDate();
+    const date = `${key}-${String(lastDay).padStart(2, "0")}`;
+    const note = `เงินเหลือ${monthLabel(y, mo - 1)}`;
+    setCollecting(true);
+    try {
+      await addSaving(user.uid, { amount: net, type: "in", date, month: key, note });
+      if (collectFrom && collectTo && collectFrom !== collectTo) {
+        await addTransfer(user.uid, {
+          fromAccountId: collectFrom,
+          toAccountId: collectTo,
+          amount: net,
+          date,
+          note,
+        });
+      }
+      notify("เก็บเงินเหลือเข้าออมแล้ว");
+      setCollectTarget(null);
+    } finally {
+      setCollecting(false);
+    }
+  };
+
+  const openWithdraw = () => {
+    setWithdraw("");
+    setWithdrawFrom(accounts[0]?.id ?? "");
+    setWithdrawTo(accounts[1]?.id ?? accounts[0]?.id ?? "");
+    setWithdrawOpen(true);
+  };
+
+  const confirmWithdraw = async () => {
     if (!user) return;
     const v = parseFloat(withdraw);
     if (isNaN(v) || v <= 0) {
@@ -121,14 +164,24 @@ export default function SavingsPage() {
       notify("ถอนเกินยอดเงินออม", "error");
       return;
     }
-    await addSaving(user.uid, {
-      amount: v,
-      type: "out",
-      date: new Date().toISOString().slice(0, 10),
-      note: "ถอนจากเงินออม",
-    });
-    setWithdraw("");
-    notify("ถอนเงินออมแล้ว", "info");
+    setWithdrawing(true);
+    try {
+      const date = todayIso();
+      await addSaving(user.uid, { amount: v, type: "out", date, note: "ถอนจากเงินออม" });
+      if (withdrawFrom && withdrawTo && withdrawFrom !== withdrawTo) {
+        await addTransfer(user.uid, {
+          fromAccountId: withdrawFrom,
+          toAccountId: withdrawTo,
+          amount: v,
+          date,
+          note: "ถอนจากเงินออม",
+        });
+      }
+      notify("ถอนเงินออมแล้ว", "info");
+      setWithdrawOpen(false);
+    } finally {
+      setWithdrawing(false);
+    }
   };
 
   const commitGoal = async () => {
@@ -204,20 +257,12 @@ export default function SavingsPage() {
             </div>
           )}
 
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <input
-              type="number"
-              min="0"
-              value={withdraw}
-              onChange={(e) => setWithdraw(e.target.value)}
-              placeholder="จำนวนที่ถอน"
-              className="w-40 rounded-lg border border-blush-200 dark:border-plum-800 bg-white dark:bg-plum-800 px-3 py-2 text-sm outline-none focus:border-blush-500"
-            />
+          <div className="mt-4">
             <button
-              onClick={doWithdraw}
+              onClick={openWithdraw}
               className="flex items-center gap-1.5 rounded-lg border border-blush-200 dark:border-plum-800 bg-white dark:bg-plum-800 px-3 py-2 text-sm font-medium text-blush-700 dark:text-blush-200 hover:bg-blush-50"
             >
-              <ArrowUpFromLine className="h-4 w-4" /> ถอน
+              <ArrowUpFromLine className="h-4 w-4" /> ถอนเงินออม
             </button>
           </div>
         </div>
@@ -261,7 +306,7 @@ export default function SavingsPage() {
                             </span>
                           ) : (
                             <button
-                              onClick={() => collect(m.key, m.net)}
+                              onClick={() => openCollect(m.key, m.net)}
                               disabled={m.net <= 0}
                               className="flex items-center gap-1 rounded-lg bg-blush-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blush-600 disabled:opacity-40"
                             >
@@ -330,6 +375,160 @@ export default function SavingsPage() {
           </>
         )}
       </main>
+
+      {/* collect leftover -> confirm + optional real transfer */}
+      <Modal
+        open={!!collectTarget}
+        onClose={() => setCollectTarget(null)}
+        title="เก็บเข้าออม"
+      >
+        {collectTarget && (
+          <div className="grid gap-3">
+            <p className="text-sm text-blush-600 dark:text-blush-300">
+              เก็บ <b className="text-blush-800 dark:text-blush-100">{formatMoney(collectTarget.net)}</b> เข้าออม
+            </p>
+
+            {accounts.length > 0 && (
+              <>
+                <label className="block">
+                  <span className="mb-1 flex items-center gap-1 text-xs font-medium text-blush-600 dark:text-blush-300">
+                    <Wallet className="h-3.5 w-3.5" /> โอนจากบัญชี (ไม่บังคับ)
+                  </span>
+                  <select
+                    value={collectFrom}
+                    onChange={(e) => setCollectFrom(e.target.value)}
+                    className={inputCls + " w-full"}
+                  >
+                    <option value="">— ไม่ระบุ —</option>
+                    {accounts.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1 flex items-center gap-1 text-xs font-medium text-blush-600 dark:text-blush-300">
+                    <Wallet className="h-3.5 w-3.5" /> เข้าบัญชีออม (ไม่บังคับ)
+                  </span>
+                  <select
+                    value={collectTo}
+                    onChange={(e) => setCollectTo(e.target.value)}
+                    className={inputCls + " w-full"}
+                  >
+                    <option value="">— ไม่ระบุ —</option>
+                    {accounts.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {collectFrom && collectTo && collectFrom !== collectTo && (
+                  <p className="text-xs text-blush-400">
+                    จะโอนเงินจริงจาก {accountName(collectFrom)} ไป {accountName(collectTo)} ด้วย
+                  </p>
+                )}
+              </>
+            )}
+
+            <div className="mt-1 grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setCollectTarget(null)}
+                className="rounded-xl border border-blush-200 dark:border-plum-800 bg-white dark:bg-plum-800 py-2.5 font-medium text-blush-600 dark:text-blush-300 hover:bg-blush-50"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={confirmCollect}
+                disabled={collecting}
+                className="flex items-center justify-center gap-2 rounded-xl bg-blush-500 py-2.5 font-semibold text-white shadow-soft hover:bg-blush-600 disabled:opacity-60"
+              >
+                {collecting ? <Loader2 className="h-4 w-4 animate-spin" /> : "ยืนยันเก็บ"}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* withdraw -> confirm + optional real transfer */}
+      <Modal open={withdrawOpen} onClose={() => setWithdrawOpen(false)} title="ถอนเงินออม">
+        <div className="grid gap-3">
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-blush-600 dark:text-blush-300">
+              จำนวนเงิน
+            </span>
+            <input
+              type="number"
+              min="0"
+              value={withdraw}
+              onChange={(e) => setWithdraw(e.target.value)}
+              placeholder="จำนวนที่ถอน"
+              className={inputCls + " w-full"}
+            />
+          </label>
+
+          {accounts.length > 0 && (
+            <>
+              <label className="block">
+                <span className="mb-1 flex items-center gap-1 text-xs font-medium text-blush-600 dark:text-blush-300">
+                  <Wallet className="h-3.5 w-3.5" /> จากบัญชีออม (ไม่บังคับ)
+                </span>
+                <select
+                  value={withdrawFrom}
+                  onChange={(e) => setWithdrawFrom(e.target.value)}
+                  className={inputCls + " w-full"}
+                >
+                  <option value="">— ไม่ระบุ —</option>
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 flex items-center gap-1 text-xs font-medium text-blush-600 dark:text-blush-300">
+                  <Wallet className="h-3.5 w-3.5" /> ไปบัญชี (ไม่บังคับ)
+                </span>
+                <select
+                  value={withdrawTo}
+                  onChange={(e) => setWithdrawTo(e.target.value)}
+                  className={inputCls + " w-full"}
+                >
+                  <option value="">— ไม่ระบุ —</option>
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {withdrawFrom && withdrawTo && withdrawFrom !== withdrawTo && (
+                <p className="text-xs text-blush-400">
+                  จะโอนเงินจริงจาก {accountName(withdrawFrom)} ไป {accountName(withdrawTo)} ด้วย
+                </p>
+              )}
+            </>
+          )}
+
+          <div className="mt-1 grid grid-cols-2 gap-3">
+            <button
+              onClick={() => setWithdrawOpen(false)}
+              className="rounded-xl border border-blush-200 dark:border-plum-800 bg-white dark:bg-plum-800 py-2.5 font-medium text-blush-600 dark:text-blush-300 hover:bg-blush-50"
+            >
+              ยกเลิก
+            </button>
+            <button
+              onClick={confirmWithdraw}
+              disabled={withdrawing}
+              className="flex items-center justify-center gap-2 rounded-xl bg-blush-500 py-2.5 font-semibold text-white shadow-soft hover:bg-blush-600 disabled:opacity-60"
+            >
+              {withdrawing ? <Loader2 className="h-4 w-4 animate-spin" /> : "ยืนยันถอน"}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
