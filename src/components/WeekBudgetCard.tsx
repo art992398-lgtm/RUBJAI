@@ -39,7 +39,7 @@ export function WeekBudgetCard({ week, limit, spent, onSave }: Props) {
     : "bg-emerald-400";
 
   const daysLeft = current ? daysLeftInWeek(week.start, week.end) : 0;
-  const perDay = current && remaining > 0 && daysLeft > 0 ? remaining / daysLeft : 0;
+  const perDay = limit / 7; // fixed daily allowance, not remaining ÷ days left
 
   return (
     <div

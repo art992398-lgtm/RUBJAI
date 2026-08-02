@@ -12,8 +12,7 @@ interface Props {
 export function HomeWidget({ weekLimit, weekSpent, daysLeft, totalSavings }: Props) {
   const weekRemaining = weekLimit - weekSpent;
   const over = weekLimit > 0 && weekSpent > weekLimit;
-  const perDay =
-    weekLimit > 0 && !over && daysLeft > 0 ? weekRemaining / daysLeft : 0;
+  const perDay = weekLimit / 7; // fixed daily allowance, not remaining ÷ days left
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
