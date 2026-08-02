@@ -7,6 +7,7 @@ import {
   PiggyBank,
   CircleDollarSign,
   ArrowLeftRight,
+  HelpCircle,
 } from "lucide-react";
 import { formatMoney } from "@/lib/format";
 import type { Account } from "@/lib/types";
@@ -22,10 +23,11 @@ const KIND_ICON: Record<Account["kind"], React.ReactNode> = {
 interface Props {
   accounts: Account[];
   balances: Record<string, number>;
+  unassigned?: number;
   onTransfer: () => void;
 }
 
-export function AccountBalances({ accounts, balances, onTransfer }: Props) {
+export function AccountBalances({ accounts, balances, unassigned = 0, onTransfer }: Props) {
   if (accounts.length === 0) return null;
 
   return (
@@ -63,6 +65,25 @@ export function AccountBalances({ accounts, balances, onTransfer }: Props) {
             </div>
           );
         })}
+        {unassigned !== 0 && (
+          <div className="flex items-center gap-3 rounded-xl bg-blush-50 dark:bg-plum-800 px-4 py-3">
+            <span className="text-blush-500">
+              <HelpCircle className="h-5 w-5" />
+            </span>
+            <div>
+              <div className="text-xs font-medium text-blush-500">
+                ไม่ระบุบัญชี
+              </div>
+              <div
+                className={`text-lg font-bold ${
+                  unassigned < 0 ? "text-rose-500" : "text-blush-700 dark:text-blush-100"
+                }`}
+              >
+                {formatMoney(unassigned)}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -16,7 +16,7 @@ import { subscribeTransfers, addTransfer, removeTransfer } from "@/lib/transfers
 import { subscribeBudgets, type BudgetMap } from "@/lib/budgets";
 import { subscribeSavings } from "@/lib/savings";
 import { subscribeDebts } from "@/lib/debts";
-import { accountBalances } from "@/lib/balances";
+import { accountBalances, unassignedBalance } from "@/lib/balances";
 import { categoryOverageByRow } from "@/lib/categoryOverage";
 import { postDueRecurring } from "@/lib/recurring";
 import { exportTransactionsCsv } from "@/lib/exporters";
@@ -196,6 +196,7 @@ export default function Dashboard() {
     () => accountBalances(rows, transfers),
     [rows, transfers]
   );
+  const unassigned = useMemo(() => unassignedBalance(rows), [rows]);
 
   const reportCategories = useMemo(() => {
     const m: Record<string, number> = {};
@@ -366,6 +367,7 @@ export default function Dashboard() {
         <AccountBalances
           accounts={accounts}
           balances={balances}
+          unassigned={unassigned}
           onTransfer={() => setTransferOpen(true)}
         />
 

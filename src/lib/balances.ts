@@ -17,3 +17,15 @@ export function accountBalances(
   }
   return m;
 }
+
+// net of transactions with no accountId — money that isn't attributed to any
+// wallet. If this isn't shown somewhere, the sum of account balances silently
+// stops matching the overall total balance and the per-wallet view looks wrong.
+export function unassignedBalance(transactions: Transaction[]): number {
+  let total = 0;
+  for (const t of transactions) {
+    if (t.accountId) continue;
+    total += t.type === "income" ? t.amount : -t.amount;
+  }
+  return total;
+}
